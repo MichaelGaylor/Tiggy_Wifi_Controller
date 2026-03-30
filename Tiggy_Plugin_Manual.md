@@ -7,12 +7,15 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 **Key features:**
 
 - Up to 6 axes (X, Y, Z, A, B, C) with independent step/direction control
-- All motion configuration stored in the plugin (not Mach3's Motor Tuning panel)
+- Axis configuration (steps/unit, velocity, accel) in the plugin dialog
+- Signal inversion configured via Mach3's **Config > Ports and Pins** dialog
 - Real-time position feedback and DRO display
 - Limit switches, home switches, E-stop, and probe inputs
 - Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs
+- Spindle encoder feedback for threading (G33/G76) and CSS (G96)
 - 5 misc outputs (EXTACT1-5) and 4 misc inputs (ACTIVATION1-4)
 - Input function mapping: assign physical buttons to Mach3 actions
+- I/O expansion module with B/C axis jog support
 - Board pin map profiles for different hardware configurations
 - Auto-discovery of controllers on the network
 - Automatic reconnection with exponential backoff
@@ -21,8 +24,9 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 
 | Board | MCU | Axes | Misc Inputs |
 |-------|-----|------|-------------|
-| Tiggy Standard Motion Controller | Compact 3-axis | 3 (X/Y/Z) | 0 |
-| Tiggy Pro Motion Controller | Full 6-axis with extended I/O | 6 (X/Y/Z/A/B/C) | 4 |
+| Tiggy Standard (ESP32-S3-Zero) | Waveshare ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | 0 |
+| Tiggy Pro (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 4 |
+| Classic (ESP32-WROOM-32) | ESP32-WROOM-32 DevKit | 6 (limited I/O) | 0 |
 
 ---
 
@@ -54,7 +58,7 @@ On first run the plugin creates default settings in the Windows registry under `
 
 ## 3. Configuration Dialog
 
-Open the plugin settings via **Config > Config Plugins > Tiggy Motion Controller** (or the plugin's toolbar button).
+Open the plugin settings via **Config > Tiggy Motion Controller...** in the Mach3 menu bar.
 
 The dialog has **6 tabs**:
 
@@ -106,22 +110,20 @@ Displays real-time state of all input signals, updated every 200ms while the tab
 | E-Stop | `status.estop_input` |
 | Probe | `status.probe_state` |
 
-Each limit switch has an **Inv** (invert) checkbox. E-Stop and Probe also have inversion checkboxes.
+**Signal inversion** is configured in **Mach3's Config > Ports and Pins** dialog, not in the plugin dialog. The plugin pre-populates input signals on Port 1 so they appear in Ports and Pins. To invert a signal, tick its **Active Low** checkbox in Mach3's Input Signals or Output Signals page.
 
-**Inversion behaviour:**
+| Signal | Port | Pins | Inversion |
+|--------|------|------|-----------|
+| X-C Limit+/- | 1 | 1-12 | Mach3 Ports & Pins (Negated) |
+| X-C Home | 1 | 13-18 | Mach3 Ports & Pins (Negated) |
+| Activation 1-4 | 1 | 19-22 | Mach3 Ports & Pins (Negated) |
+| Probe | 1 | 23 | Mach3 Ports & Pins (Negated) |
+| E-Stop | 1 | 24 | Mach3 Ports & Pins (Negated) |
+| Index (spindle) | 1 | 25 | Mach3 Ports & Pins (Negated) |
 
-| Signal | Raw Source | Inversion Applied By |
-|--------|-----------|---------------------|
-| Limit switches | Firmware sends raw GPIO state | Plugin applies inversion |
-| Home switches | Firmware applies inversion internally | Plugin does NOT double-invert |
-| E-Stop | Firmware sends raw GPIO state | Plugin applies inversion |
-| Probe | Firmware sends raw GPIO state | Plugin applies inversion |
+Step/Dir inversion is set in Mach3's **Config > Ports and Pins > Motor Outputs** (StepNegate / DirNegate columns).
 
-**Tip:** If a signal shows ON with nothing connected, tick its Inv checkbox.
-
-#### Home Switch Inversion
-
-Separate group of 6 checkboxes (X-C Home) that control the `invertHome` bitmask sent to the firmware. Since the firmware applies home switch inversion internally, these checkboxes tell the **firmware** how to interpret the home switch pins during homing.
+**Tip:** If a signal shows ON with nothing connected, enable it and tick Active Low in Mach3 Ports & Pins.
 
 #### Misc Input Functions (button press -> action)
 
@@ -159,7 +161,7 @@ Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each
 
 #### Step/Dir Inversion
 
-Per-axis checkboxes to invert the step and direction signals. Use these if your stepper drivers expect opposite polarity.
+Step and direction inversion is now configured in Mach3's **Config > Ports and Pins > Motor Outputs** dialog. The plugin reads these settings automatically.
 
 #### Homing
 
@@ -210,7 +212,7 @@ Eight input channels (In 0 - In 7) can each be assigned a function:
 | Function | Code | Description |
 |----------|------|-------------|
 | None | 0 | Disabled |
-| Jog X+/X-/Y+/Y-/Z+/Z-/A+/A- | 101-108 | Jog the specified axis in the specified direction |
+| Jog X+/X-/Y+/Y-/Z+/Z-/A+/A-/B+/B-/C+/C- | 101-112 | Jog the specified axis in the specified direction |
 | Cycle Start | 1000 | Start G-code execution |
 | Feed Hold | 1001 | Pause motion |
 | Stop | 1003 | Stop the current program |
@@ -415,6 +417,25 @@ M65 P0              ; Turn off Output #1
 M63 P1              ; Turn off Output #2 after any pending motion
 ```
 
+### Spindle Encoder (Lathe Features)
+
+The controller supports a quadrature spindle encoder with index pulse for lathe operations:
+
+| Feature | G-Code | Description |
+|---------|--------|-------------|
+| Threading | G33 / G76 | Spindle-synchronized Z moves for thread cutting |
+| CSS | G96 | Constant Surface Speed -- RPM auto-adjusts with X position |
+| RPM mode | G97 | Fixed RPM mode (standard) |
+
+**Setup:**
+1. Connect encoder A, B, and Index signals to the GPIO pins shown in Pin Map
+2. The encoder PPR (pulses per revolution) is detected at handshake
+3. Spindle position is fed to Mach3's `Engine->CurrentSpindleCount` at 50ms intervals
+4. Index pulse edges are reported to Mach3 for thread start synchronization
+5. Set Mach3 to **Lathe mode** in Config > General Config (this is a Mach3 setting, not plugin-controlled)
+
+Live spindle RPM is displayed on the Connection tab.
+
 ### Charge Pump
 
 When enabled (frequency > 0), the plugin sends a PWM frequency to the controller's charge pump GPIO. The charge pump activates when:
@@ -587,13 +608,11 @@ The plugin writes axis configuration (steps/unit, velocity, acceleration) into M
 
 ### E-stop triggers with nothing connected
 
-The E-stop GPIO pin may be floating high. Tick the **Inv** checkbox next to E-Stop in the Inputs tab. This inverts the interpretation so an open (unconnected) pin reads as "not triggered".
+The E-stop GPIO pin may be floating high. Go to **Config > Ports and Pins > Input Signals**, find the E-Stop signal (Port 1, Pin 24), enable it and tick **Active Low**. This inverts the interpretation so an open (unconnected) pin reads as "not triggered".
 
 ### Homing completes instantly without touching switches
 
-The firmware thinks the home switches are already triggered. Check the Inputs tab:
-- If home switches show **ON** with nothing connected, tick the corresponding **Home switch inversion** checkboxes
-- The firmware applies home inversion internally, so these checkboxes directly affect the firmware's interpretation during homing
+The firmware thinks the home switches are already triggered. Go to **Config > Ports and Pins > Input Signals** and tick **Active Low** for the home switch signals (Port 1, Pins 3/6/9/12/15/18 for X-C Home). The plugin reads the Negated flag and sends the inversion to the firmware.
 
 ### Homing only moves one axis
 
@@ -609,9 +628,9 @@ The firmware homes axes sequentially (typically Z first for safety). If axes app
 
 ### Limit switches not working
 
-The plugin force-enables limit switch signals for all enabled axes. If limits don't trigger:
+The plugin enables limit switch signals for all enabled axes. If limits don't trigger:
 1. Check the Inputs tab live display - does the switch show ON when physically pressed?
-2. If it shows the wrong state, tick the Inv checkbox for that axis
+2. If it shows the wrong state, go to Mach3 **Config > Ports and Pins > Input Signals** and tick **Active Low** for that limit signal
 3. Verify the limit GPIO is correctly wired to the pin shown in the Pin Map tab
 
 ### Input function buttons don't trigger
