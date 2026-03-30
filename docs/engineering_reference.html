@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WiFi CNC Controller &mdash; Engineering Reference</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --fg: #e0e0e0;
+    --fg2: #a0a0b0;
+    --accent: #e94560;
+    --green: #4ecca3;
+    --yellow: #f5c542;
+    --blue: #53a8d8;
+    --code-bg: #0d1117;
+    --border: #333355;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    padding: 0;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Navigation */
+  nav {
+    position: fixed; top: 0; left: 0; width: 280px; height: 100vh;
+    background: var(--bg2); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 20px 0; z-index: 100;
+  }
+  nav h2 { padding: 0 20px 10px; color: var(--accent); font-size: 1.1em; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  nav ul { list-style: none; }
+  nav ul li { padding: 0; }
+  nav ul li a { display: block; padding: 5px 20px; color: var(--fg2); font-size: 0.9em; }
+  nav ul li a:hover { background: var(--bg3); color: var(--fg); text-decoration: none; }
+  nav ul li.section { padding: 10px 20px 3px; color: var(--green); font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+
+  /* Main content */
+  main { margin-left: 280px; padding: 40px 60px; max-width: 1000px; }
+  h1 { color: var(--accent); font-size: 2em; margin-bottom: 10px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+  h2 { color: var(--green); font-size: 1.5em; margin-top: 40px; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+  h3 { color: var(--blue); font-size: 1.2em; margin-top: 25px; margin-bottom: 10px; }
+  h4 { color: var(--yellow); margin-top: 15px; margin-bottom: 8px; }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 10px 0 15px 30px; }
+  li { margin-bottom: 5px; }
+
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 3px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.9em;
+    color: var(--yellow);
+  }
+  pre {
+    background: var(--code-bg); padding: 15px 20px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0 20px; border: 1px solid var(--border);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em;
+    line-height: 1.5; color: var(--fg);
+  }
+  pre .comment { color: #6a737d; }
+  pre .keyword { color: #ff7b72; }
+  pre .string { color: #a5d6ff; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 0.9em; }
+  th { background: var(--bg3); color: var(--green); font-weight: 600; }
+  td { background: var(--bg2); }
+  td code { background: transparent; padding: 0; color: var(--yellow); }
+
+  .warning { background: #3d2b00; border-left: 4px solid var(--yellow); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .warning strong { color: var(--yellow); }
+  .info { background: #1a2d40; border-left: 4px solid var(--blue); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .info strong { color: var(--blue); }
+  .critical { background: #3d1a1a; border-left: 4px solid var(--accent); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .critical strong { color: var(--accent); }
+
+  .diagram {
+    background: var(--code-bg); padding: 20px; border-radius: 6px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8em; line-height: 1.4; overflow-x: auto;
+    border: 1px solid var(--border); margin: 15px 0 20px; white-space: pre;
+  }
+
+  .file-tree { background: var(--code-bg); padding: 15px 20px; border-radius: 6px; font-family: monospace; font-size: 0.85em; line-height: 1.6; border: 1px solid var(--border); margin: 10px 0 20px; }
+  .file-tree .dir { color: var(--blue); font-weight: bold; }
+  .file-tree .file { color: var(--fg2); }
+  .file-tree .new { color: var(--green); }
+  .file-tree .mod { color: var(--yellow); }
+
+  @media (max-width: 900px) {
+    nav { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { margin-left: 0; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <h2>WiFi CNC Controller</h2>
+  <ul>
+    <li class="section">Overview</li>
+    <li><a href="#overview">Project Overview</a></li>
+    <li><a href="#architecture">System Architecture</a></li>
+    <li><a href="#cores">Core Allocation</a></li>
+    <li><a href="#files">File Map</a></li>
+
+    <li class="section">Firmware Subsystems</li>
+    <li><a href="#stepper">Stepper Engine</a></li>
+    <li><a href="#planner-ring">Planner Ring Buffer</a></li>
+    <li><a href="#motion-control">Motion Control Task</a></li>
+    <li><a href="#gpio">GPIO &amp; I/O Control</a></li>
+    <li><a href="#nvs">NVS Configuration</a></li>
+    <li><a href="#pin-remap">Runtime Pin Remapping</a></li>
+    <li><a href="#network">Network Stack</a></li>
+
+    <li class="section">G-Code Interpreter</li>
+    <li><a href="#gcode-overview">G-Code Overview</a></li>
+    <li><a href="#parser">Parser &amp; Modal State</a></li>
+    <li><a href="#lookahead">Look-Ahead Planner</a></li>
+    <li><a href="#junction">Junction Velocity (G64)</a></li>
+    <li><a href="#corner-smooth">Corner Smoothing</a></li>
+    <li><a href="#arcs">Arc Interpolation</a></li>
+    <li><a href="#probing">Probing (G38.x)</a></li>
+    <li><a href="#jogging">Jog Commands</a></li>
+    <li><a href="#grbl-settings">GRBL Settings ($)</a></li>
+    <li><a href="#realtime">Real-Time Commands</a></li>
+    <li><a href="#status-report">Status Report Format</a></li>
+    <li><a href="#transports">Transports (Telnet/UART)</a></li>
+
+    <li class="section">Binary Protocol</li>
+    <li><a href="#protocol">Protocol Specification</a></li>
+    <li><a href="#coexistence">Coexistence</a></li>
+
+    <li class="section">Critical Behaviour</li>
+    <li><a href="#constant-velocity">Constant Velocity Vectoring</a></li>
+    <li><a href="#underrun">Buffer Underrun Recovery</a></li>
+    <li><a href="#estop-recovery">E-Stop Position Preservation</a></li>
+    <li><a href="#comms-isolation">Comms/Motion Isolation</a></li>
+
+    <li class="section">Operations</li>
+    <li><a href="#build">Building &amp; Flashing</a></li>
+    <li><a href="#connecting">Connecting G-Code Senders</a></li>
+    <li><a href="#testing">Testing Procedures</a></li>
+    <li><a href="#grbl-commands">GRBL Command Reference</a></li>
+    <li><a href="#gcode-ref">Supported G/M Codes</a></li>
+    <li><a href="#config-keys">NVS Config Key Reference</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ============================================================ -->
+<h1 id="overview">WiFi CNC Controller &mdash; Engineering Reference</h1>
+<p>
+  Firmware version 1.0.0 &mdash; ESP32-S3 based 6-axis CNC motion controller with dual-mode operation:
+  <strong>binary protocol</strong> (Mach3 plugin / LinuxCNC HAL) and <strong>GRBL-compatible G-code interpreter</strong>
+  (any standard sender over WiFi telnet or USB serial).
+</p>
+
+<h2 id="architecture">System Architecture</h2>
+
+<div class="diagram">
+  +------------------------------------------------------------------+
+  |                        Host Computer                             |
+  |  +------------------+  +------------------+  +----------------+  |
+  |  | Mach3 + WiFiCNC  |  | LinuxCNC + HAL   |  | UGS / CNCjs   |  |
+  |  | Plugin (DLL)     |  | (wificnc-hal)    |  | / bCNC         |  |
+  |  +--------+---------+  +--------+---------+  +-------+--------+  |
+  |           |                      |                    |           |
+  |     Binary Protocol        Binary Protocol      G-code text      |
+  |     UDP 58427/58428        UDP 58427/58428     TCP 23 (telnet)   |
+  |     TCP 58429              TCP 58429           or USB serial      |
+  +-----------|----------------------|--------------------|-----------+
+              |                      |                    |
+  ============|======================|====================|=========== WiFi / USB
+              |                      |                    |
+  +-----------|----------------------|--------------------|-----------+
+  |           v                      v                    v           |
+  |  +--------------------------------------------------+           |
+  |  |              CORE 0 &mdash; Communications              |           |
+  |  |                                                    |           |
+  |  |  udp_server  tcp_server  gcode_telnet  gcode_uart  |           |
+  |  |      |           |           |              |      |           |
+  |  |      v           v           v              v      |           |
+  |  |  protocol_handler     gcode_interface              |           |
+  |  |      |                     |                       |           |
+  |  |      |               gcode_parser                  |           |
+  |  |      |               gcode_planner (look-ahead)    |           |
+  |  |      |               gcode_arcs                    |           |
+  |  |      |               grbl_settings                 |           |
+  |  |      |                     |                       |           |
+  |  |      +----------+----------+                       |           |
+  |  |                 |                                  |           |
+  |  |                 v                                  |           |
+  |  |     planner_push_segment()                         |           |
+  |  +--------------------------------------------------+           |
+  |                    |                                             |
+  |  ==================|============ Lock-free ring buffer ========= |
+  |                    |           (128 slots, SPSC, volatile        |
+  |                    v            head/tail, memory barriers)      |
+  |  +--------------------------------------------------+           |
+  |  |              CORE 1 &mdash; Motion Control               |           |
+  |  |                                                    |           |
+  |  |  motion_control_task  (prio 20)                    |           |
+  |  |      |                                             |           |
+  |  |      v                                             |           |
+  |  |  stepper ISR  (IRAM, 1 MHz timer, direct GPIO)    |           |
+  |  |      |                                             |           |
+  |  |      v                                             |           |
+  |  |  Step/Dir pins &rarr; Motor drivers &rarr; Steppers           |
+  |  +--------------------------------------------------+           |
+  |                                                                  |
+  |                    ESP32-S3 Firmware                              |
+  +------------------------------------------------------------------+
+</div>
+
+<h2 id="cores">Core Allocation &amp; Task Map</h2>
+<table>
+  <tr><th>Task</th><th>Priority</th><th>Stack</th><th>Core</th><th>Purpose</th></tr>
+  <tr><td><code>motion_control_task</code></td><td>20</td><td>4096</td><td>1</td><td>Segment execution, state machine</td></tr>
+  <tr><td><code>stepper ISR</code></td><td>ISR</td><td>IRAM</td><td>1</td><td>1 MHz timer, Bresenham stepping</td></tr>
+  <tr><td><code>udp_receive_task</code></td><td>10</td><td>4096</td><td>0</td><td>Binary protocol motion/control</td></tr>
+  <tr><td><code>gcode_exec_task</code></td><td>8</td><td>6144</td><td>0</td><td>G-code parse + plan + emit</td></tr>
+  <tr><td><code>gcode_uart_task</code></td><td>7</td><td>3072</td><td>0</td><td>USB serial G-code input</td></tr>
+  <tr><td><code>gcode_telnet_task</code></td><td>6</td><td>4096</td><td>0</td><td>WiFi telnet server (port 23)</td></tr>
+  <tr><td><code>tcp_server_task</code></td><td>5</td><td>4096</td><td>0</td><td>Binary protocol config/handshake</td></tr>
+  <tr><td><code>wifi_manager</code></td><td>5</td><td>4096</td><td>0</td><td>WiFi STA/AP management</td></tr>
+  <tr><td><code>status_report_task</code></td><td>3</td><td>2048</td><td>0</td><td>UDP status broadcast</td></tr>
+</table>
+
+<div class="critical">
+  <strong>Critical Rule:</strong> Core 1 is exclusively for motion. No WiFi, no TCP, no telnet, no allocations.
+  The stepper ISR runs from IRAM with direct GPIO register writes. No flash access, no cache misses.
+</div>
+
+<h2 id="files">File Map</h2>
+<div class="file-tree">
+<span class="dir">Mach3_Controller/</span>
+  <span class="dir">firmware/</span>
+    platformio.ini                   &mdash; PlatformIO config + board define (pio builds)
+    CMakeLists.txt                   &mdash; Top-level ESP-IDF project file
+    <span class="dir">main/</span>
+      <span class="mod">main.c</span>                       &mdash; Entry point, task creation
+      <span class="mod">config.h</span>                     &mdash; Compile-time defaults, task config
+      <span class="mod">CMakeLists.txt</span>               &mdash; Component sources + board define (idf.py builds)
+      pin_config.h                   &mdash; Board-specific GPIO defaults (compile-time)
+      <span class="dir">motion/</span>
+        <span class="mod">stepper.c/.h</span>               &mdash; Timer ISR, Bresenham, probe detection, NVS pin loading
+        motion_control.c/.h          &mdash; Core 1 state machine
+        planner.c/.h                 &mdash; 128-slot lock-free ring buffer
+      <span class="dir">network/</span>
+        wifi_manager.c/.h            &mdash; STA/AP WiFi management
+        udp_server.c/.h              &mdash; UDP motion + status ports
+        tcp_server.c/.h              &mdash; TCP config + handshake
+        <span class="mod">protocol_handler.c/.h</span>      &mdash; Binary packet dispatch + preemption + pin reboot warning
+      <span class="dir">io/</span>
+        <span class="mod">gpio_control.c/.h</span>          &mdash; Limits, probe, spindle, misc I/O, NVS pin loading
+      <span class="dir">status/</span>
+        <span class="mod">status_reporter.c/.h</span>       &mdash; Periodic UDP status broadcast
+      <span class="dir">persist/</span>
+        <span class="mod">nvs_config.c/.h</span>            &mdash; NVS get/set with protocol key mapping + pin config keys
+      <span class="new">gcode/</span>                         &mdash; <strong>G-CODE INTERPRETER (NEW)</strong>
+        <span class="new">gcode_parser.c/.h</span>          &mdash; Tokenizer, modal groups, validation
+        <span class="new">gcode_planner.c/.h</span>         &mdash; 64-slot look-ahead, junction velocity, corner smoothing
+        <span class="new">gcode_interface.c/.h</span>       &mdash; Execution task, status, real-time cmds
+        <span class="new">gcode_arcs.c/.h</span>            &mdash; G2/G3 arc linearization
+        <span class="new">gcode_jog.c/.h</span>             &mdash; $J= jog command handler
+        <span class="new">grbl_settings.c/.h</span>         &mdash; GRBL $N &harr; NVS mapping
+        <span class="new">gcode_telnet.c/.h</span>          &mdash; TCP telnet server (port 23)
+        <span class="new">gcode_uart.c/.h</span>            &mdash; USB serial handler (115200)
+  <span class="dir">protocol/</span>
+    <span class="mod">wifi_cnc_protocol.h</span>              &mdash; Shared packet definitions, CRC, pin config keys
+  <span class="dir">plugin/</span>
+    WiFiCNC/                         &mdash; Mach3 DLL plugin (Windows)
+  <span class="dir">linuxcnc/</span>
+    wificnc-hal.c/.h                 &mdash; LinuxCNC HAL component
+  <span class="dir">tools/</span>
+    <span class="mod">protocol_test_gui.py</span>             &mdash; Python/tkinter test GUI (Pins tab, 6-axis jog)
+    <span class="mod">protocol_test.py</span>                 &mdash; CLI test tool (+ pin config keys)
+</div>
+<p><span style="color: var(--green);">Green = new files</span>, <span style="color: var(--yellow);">Yellow = modified files</span></p>
+
+
+<!-- ============================================================ -->
+<h2 id="stepper">Stepper Engine (<code>motion/stepper.c</code>)</h2>
+<p>
+  Hardware timer ISR at 1 MHz resolution. Bresenham multi-axis step distribution with
+  jerk-limited S-curve velocity profiles (trapezoidal fallback when <code>$40=0</code>).
+  All state in DRAM for zero-latency ISR access.
+</p>
+
+<h3>Key Data Flow</h3>
+<pre>
+wcnc_motion_segment_t
+  &rarr; stepper_load_segment()
+    &rarr; Compute Bresenham counters, accel/decel boundaries
+    &rarr; Start GPTimer
+      &rarr; ISR fires at current_interval (us)
+        &rarr; Set direction pins
+        &rarr; Wait dir_setup_us
+        &rarr; Check probe pin (if WCNC_SEG_FLAG_PROBE)
+        &rarr; Bresenham: counter += steps[axis], if overflow: step pin HIGH
+        &rarr; Wait step_pulse_us
+        &rarr; Step pins LOW
+        &rarr; Update position[axis]
+        &rarr; Compute next interval (7-phase S-curve or trapezoidal ramp)
+        &rarr; Schedule next alarm
+</pre>
+
+<h3>S-Curve (Jerk-Limited) Acceleration</h3>
+<p>
+  When <code>$40</code> (max jerk) is non-zero, the ISR uses a 7-phase velocity profile
+  where acceleration ramps up and down smoothly instead of switching instantly:
+</p>
+<pre>
+Trapezoidal:  |&macr;&macr;&macr;&macr;&macr;|          |&macr;&macr;&macr;&macr;&macr;|     (acceleration)
+              0  accel  cruise  decel   0
+
+S-curve:      /&macr;&macr;&macr;&macr;&macr;\          /&macr;&macr;&macr;&macr;&macr;\     (acceleration)
+             0  ramp    const   ramp    0
+</pre>
+<p>
+  The 7 phases: jerk-up &rarr; const-accel &rarr; jerk-down &rarr; cruise &rarr;
+  jerk-down &rarr; const-decel &rarr; jerk-up. Each jerk ramp is capped to &frac13;
+  of the accel/decel phase to avoid overshooting.
+</p>
+<p>
+  All computation is integer add/subtract/compare using v&sup2; kinematic tracking
+  (<code>speed_sq += current_two_accel</code>). No floating-point or flash function calls
+  in the ISR &mdash; fully IRAM-safe.
+</p>
+<table>
+  <tr><th>Setting</th><th>NVS Key</th><th>Default</th><th>Effect</th></tr>
+  <tr><td><code>$40</code></td><td><code>jerk_max</code></td><td>1000</td><td>Max jerk (mm/sec&sup3;). 0 = trapezoidal fallback.</td></tr>
+</table>
+<div class="info">
+  <strong>Tuning:</strong> Lower jerk = smoother but slower transitions. Higher jerk = snappier.
+  <code>$40=500</code> for smooth finishing, <code>$40=2000</code> for fast positioning.
+  <code>$40=0</code> disables S-curve entirely (original trapezoidal behaviour).
+</div>
+
+<h3>Probe Detection in ISR</h3>
+<p>
+  When a segment carries <code>WCNC_SEG_FLAG_PROBE</code>, the ISR checks the probe pin via
+  <code>gpio_ll_get_level()</code> (direct register read, no function call overhead) on every step tick.
+  When triggered, motion stops immediately and <code>probe_triggered</code> is set. The G-code interface
+  reads the stopped position as the probe result.
+</p>
+
+<h3>Step Rate Architecture</h3>
+<p>
+  The stepper engine uses a single hardware timer (GPTimer) at 1 MHz resolution (1&micro;s ticks).
+  The Bresenham algorithm distributes steps across all active axes within a single ISR call.
+</p>
+
+<h4>Aggregate Rate Limit</h4>
+<p>
+  <code>CFG_MAX_AGGREGATE_STEP_RATE = 250,000</code> &mdash; this is the <strong>ISR firing rate cap</strong>,
+  not a per-axis limit. The minimum timer interval is clamped to 4&micro;s (= 1,000,000 / 250,000).
+</p>
+<ul>
+  <li><strong>Single axis moving alone:</strong> Can theoretically reach 250 kHz step rate</li>
+  <li><strong>Multiple axes moving simultaneously:</strong> The ISR fires at the rate of the <strong>dominant
+    (fastest) axis</strong>. Other axes receive their steps via Bresenham distribution within the same ISR call.
+    All active axes pulse in parallel &mdash; the rate is <strong>not</strong> divided among axes.</li>
+</ul>
+
+<h4>Practical Rate Limits</h4>
+<p>
+  Each ISR call has fixed overhead from the direction setup and step pulse timing:
+</p>
+<table>
+  <tr><th>Timing Parameter</th><th>NVS Key</th><th>Default</th><th>Description</th></tr>
+  <tr><td>Direction Setup</td><td><code>dir_us</code></td><td>2&micro;s</td><td>Delay after setting direction pins before stepping</td></tr>
+  <tr><td>Step Pulse Width</td><td><code>pulse_us</code></td><td>3&micro;s</td><td>Minimum pulse HIGH time for stepper driver</td></tr>
+  <tr><td><strong>Total ISR overhead</strong></td><td></td><td><strong>5&micro;s</strong></td><td>Minimum time per ISR call (direction + pulse)</td></tr>
+</table>
+<p>
+  With default timing (5&micro;s overhead per ISR call), the practical maximum step rate is approximately
+  <strong>200 kHz</strong> (1/5&micro;s). Reducing <code>pulse_us</code> to 2&micro;s and <code>dir_us</code> to 1&micro;s
+  would yield ~333 kHz theoretical, but the 4&micro;s minimum interval clamp limits this to 250 kHz.
+</p>
+
+<div class="info">
+  <strong>Key takeaway:</strong> 250 kHz is the combined Bresenham step event rate, not per-axis.
+  A single axis can reach the full rate. Multiple simultaneous axes share the same ISR firing but pulse
+  in parallel within each call &mdash; the rate is not divided by the number of active axes.
+  With default 3&micro;s + 2&micro;s timing, expect ~200 kHz practical maximum.
+</div>
+
+<h4>Per-Axis Rate Clamping</h4>
+<p>
+  Each axis's <code>max_rate</code> (configured via <code>$110-$115</code>) is individually clamped to
+  <code>CFG_MAX_AGGREGATE_STEP_RATE</code> at boot:
+</p>
+<pre>
+if (st.max_rate[i] &gt; CFG_MAX_AGGREGATE_STEP_RATE)
+    st.max_rate[i] = CFG_MAX_AGGREGATE_STEP_RATE;
+</pre>
+<p>
+  This prevents any axis from being configured above the hardware-enforced ceiling.
+</p>
+
+<h3>Position Preservation</h3>
+<p>
+  <code>stepper_estop()</code> stops the timer and disables outputs but <strong>never zeros the position counter</strong>.
+  <code>st.position[]</code> always reflects the exact step where motion ceased. This is critical for
+  E-stop recovery.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="planner-ring">Planner Ring Buffer (<code>motion/planner.c</code>)</h2>
+<p>
+  128-slot SPSC (single-producer, single-consumer) lock-free circular buffer.
+  Producer: Core 0 (protocol handler or G-code planner). Consumer: Core 1 (motion control task).
+</p>
+
+<table>
+  <tr><th>Function</th><th>Called From</th><th>Description</th></tr>
+  <tr><td><code>planner_push_segment()</code></td><td>Core 0</td><td>Add segment, blocks if full</td></tr>
+  <tr><td><code>planner_pop_segment()</code></td><td>Core 1</td><td>Consume next segment</td></tr>
+  <tr><td><code>planner_available()</code></td><td>Any</td><td>Free slots (for back-pressure)</td></tr>
+  <tr><td><code>planner_capacity()</code></td><td>Any</td><td>Total capacity (128)</td></tr>
+  <tr><td><code>planner_is_empty()</code></td><td>Any</td><td>Check if buffer empty</td></tr>
+  <tr><td><code>planner_clear()</code></td><td>Core 0</td><td>Discard all segments (E-stop)</td></tr>
+</table>
+
+<div class="info">
+  <strong>Lock-free guarantee:</strong> Uses volatile head/tail indices with compiler memory barriers.
+  No mutexes, no spinlocks, no priority inversion between cores.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 id="motion-control">Motion Control Task (<code>motion/motion_control.c</code>)</h2>
+<p>
+  Core 1 state machine. Pops segments from the ring buffer and loads them into the stepper engine.
+  States: IDLE, RUN, HOLD, JOG, HOMING, PROBING, ALARM, ESTOP.
+</p>
+
+
+<!-- ============================================================ -->
+<h2 id="gpio">GPIO &amp; I/O Control (<code>io/gpio_control.c</code>)</h2>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>gpio_control_init()</code></td><td>Load pin assignments from NVS (compile-time defaults as fallback), configure GPIO</td></tr>
+  <tr><td><code>gpio_control_get_probe()</code></td><td>Read probe pin (with inversion)</td></tr>
+  <tr><td><code>gpio_control_get_limit(axis)</code></td><td>Read limit switch for axis</td></tr>
+  <tr><td><code>gpio_control_get_limit_mask()</code></td><td>All limit states as bitmask</td></tr>
+  <tr><td><code>gpio_control_set_spindle(bool)</code></td><td>Enable/disable spindle output</td></tr>
+  <tr><td><code>gpio_control_set_misc_output(n, state)</code></td><td>Set misc output pin</td></tr>
+  <tr><td><code>gpio_control_get_estop()</code></td><td>Read E-stop input</td></tr>
+  <tr><td><code>gpio_control_set_led(bool)</code></td><td>Legacy stub &mdash; LED now managed by <a href="#status-led"><code>status_led</code></a> module</td></tr>
+</table>
+
+<h3>Supported Boards</h3>
+<table>
+  <tr><th>Board</th><th>Define</th><th>Charge Pump</th><th>Misc Out</th><th>Notes</th></tr>
+  <tr><td>Waveshare ESP32-S3-Zero</td><td><code>BOARD_ESP32S3_ZERO</code></td><td>No</td><td>0</td><td>Compact, limited GPIO</td></tr>
+  <tr><td>ESP32-S3-DevKitC-1</td><td><code>BOARD_ESP32S3_DEVKITC</code></td><td>Yes</td><td>2</td><td>Most GPIO, recommended</td></tr>
+  <tr><td>ESP32-WROOM-32</td><td><code>BOARD_ESP32_WROOM32</code></td><td>No</td><td>0</td><td>Classic ESP32, input-only GPIOs</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="nvs">NVS Configuration (<code>persist/nvs_config.c</code>)</h2>
+<p>
+  Non-volatile storage for all runtime settings. Values persist across power cycles.
+  Accessible via binary protocol (<code>WCNC_PKT_CONFIG_GET/SET</code>) and GRBL <code>$N=value</code> commands.
+</p>
+<p>
+  Two access methods:
+</p>
+<ul>
+  <li><strong>By NVS key</strong> (direct): <code>nvs_config_get_float("spm_x", 800.0f)</code></li>
+  <li><strong>By protocol key</strong> (binary): <code>nvs_config_get_by_protocol_key(WCNC_CFG_STEPS_MM_X, ...)</code></li>
+  <li><strong>By GRBL number</strong> (G-code): <code>grbl_setting_set(100, 800.0f)</code> maps to <code>"spm_x"</code></li>
+</ul>
+
+
+<!-- ============================================================ -->
+<h2 id="pin-remap">Runtime Pin Remapping</h2>
+<p>
+  GPIO pin assignments are stored in NVS and can be changed at runtime without recompiling firmware.
+  Compile-time defaults from <code>pin_config.h</code> serve as fallback values when no NVS entry exists.
+</p>
+
+<h3>How It Works</h3>
+<ol>
+  <li><strong>Boot:</strong> <code>stepper_init()</code> and <code>gpio_control_init()</code> read pin assignments from NVS,
+    falling back to compile-time <code>pin_config.h</code> defaults if no NVS entry exists</li>
+  <li><strong>Runtime storage:</strong> Pins are cached in static variables (<code>st.step_pins[]</code>, <code>s_limit_pins[]</code>,
+    <code>s_estop_pin</code>, etc.) and used throughout the firmware</li>
+  <li><strong>Configuration:</strong> Pin assignments can be read/written via the binary protocol (<code>CONFIG_GET/SET</code>
+    with keys <code>0x0500-0x0519</code>) or the GUI Pins tab</li>
+  <li><strong>Reboot required:</strong> Pin changes are written to NVS immediately but only take effect after reboot.
+    Reconfiguring GPIOs while the stepper ISR is running would be unsafe.</li>
+</ol>
+
+<h3>Pin Configuration Keys (0x0500&ndash;0x0519)</h3>
+<table>
+  <tr><th>Protocol Key</th><th>NVS Key</th><th>Description</th><th>Board Default</th></tr>
+  <tr><td><code>0x0500</code></td><td><code>p_sx</code></td><td>Step X GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0501</code></td><td><code>p_sy</code></td><td>Step Y GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0502</code></td><td><code>p_sz</code></td><td>Step Z GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0503</code></td><td><code>p_sa</code></td><td>Step A GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0504</code></td><td><code>p_sb</code></td><td>Step B GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0505</code></td><td><code>p_sc</code></td><td>Step C GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0506</code></td><td><code>p_dx</code></td><td>Dir X GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0507</code></td><td><code>p_dy</code></td><td>Dir Y GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0508</code></td><td><code>p_dz</code></td><td>Dir Z GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0509</code></td><td><code>p_da</code></td><td>Dir A GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050A</code></td><td><code>p_db</code></td><td>Dir B GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050B</code></td><td><code>p_dc</code></td><td>Dir C GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050C</code></td><td><code>p_en</code></td><td>Enable GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050D</code></td><td><code>p_lx</code></td><td>Limit X GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050E</code></td><td><code>p_ly</code></td><td>Limit Y GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x050F</code></td><td><code>p_lz</code></td><td>Limit Z GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0510</code></td><td><code>p_la</code></td><td>Limit A GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0511</code></td><td><code>p_lb</code></td><td>Limit B GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0512</code></td><td><code>p_lc</code></td><td>Limit C GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0513</code></td><td><code>p_prb</code></td><td>Probe GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0514</code></td><td><code>p_est</code></td><td>E-Stop GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0515</code></td><td><code>p_spn</code></td><td>Spindle GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0516</code></td><td><code>p_led</code></td><td>Status LED GPIO</td><td>Board-specific</td></tr>
+  <tr><td><code>0x0517</code></td><td><code>p_cp</code></td><td>Charge Pump GPIO</td><td>Board-specific*</td></tr>
+  <tr><td><code>0x0518</code></td><td><code>p_mo0</code></td><td>Misc Output 0 GPIO</td><td>Board-specific*</td></tr>
+  <tr><td><code>0x0519</code></td><td><code>p_mo1</code></td><td>Misc Output 1 GPIO</td><td>Board-specific*</td></tr>
+</table>
+<p style="font-size: 0.85em; color: var(--fg2);">
+  * Charge pump and misc outputs only available on boards that define <code>HAS_CHARGE_PUMP</code> or
+  <code>MISC_OUTPUT_COUNT &gt; 0</code> (e.g. ESP32-S3-DevKitC). All pin keys are <code>WCNC_VAL_UINT8</code> (GPIO number 0&ndash;48).
+</p>
+
+<div class="warning">
+  <strong>Safety:</strong> Pin changes require a reboot to take effect. The firmware logs
+  <code>"Pin config 0x05XX updated &mdash; reboot required"</code> when a pin key is written.
+  Reassigning GPIOs while the stepper ISR is active would cause undefined behaviour.
+</div>
+
+<h3>GUI Pin Configuration</h3>
+<p>
+  The protocol test GUI (<code>tools/protocol_test_gui.py</code>) includes a <strong>Pins</strong> tab
+  for reading and writing all 26 pin assignments. The tab shows:
+</p>
+<ul>
+  <li>Stepper pins table: 6 rows (X&ndash;C) &times; 3 columns (Step, Dir, Limit GPIO)</li>
+  <li>Single pins: Enable, Probe, E-Stop, Spindle, LED, Charge Pump, Misc Out 0/1</li>
+  <li>Read button: fetches current pin config from ESP32</li>
+  <li>Write &amp; Save button: sends all pin values to NVS and commits to flash</li>
+</ul>
+
+
+<!-- ============================================================ -->
+<h2 id="network">Network Stack</h2>
+<table>
+  <tr><th>Port</th><th>Protocol</th><th>Direction</th><th>Purpose</th></tr>
+  <tr><td>58427</td><td>UDP</td><td>PC &rarr; ESP32</td><td>Motion segments, jog, E-stop, home, I/O</td></tr>
+  <tr><td>58428</td><td>UDP</td><td>ESP32 &rarr; PC</td><td>Status reports (50ms interval)</td></tr>
+  <tr><td>58429</td><td>TCP</td><td>Bidirectional</td><td>Handshake, config get/set, keepalive</td></tr>
+  <tr><td>23</td><td>TCP (telnet)</td><td>Bidirectional</td><td>G-code text interface (single client)</td></tr>
+  <tr><td>UART0</td><td>Serial</td><td>Bidirectional</td><td>G-code text interface (115200 baud)</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h1 id="gcode-overview">G-Code Interpreter</h1>
+<p>
+  GRBL 1.1-compatible G-code interpreter enabling standalone CNC operation with any standard
+  G-code sender (UGS, CNCjs, bCNC, LaserGRBL). Runs entirely on Core 0.
+</p>
+
+<h3>Data Flow</h3>
+<div class="diagram">
+Telnet/UART byte stream
+  &rarr; Real-time chars (?, !, ~, 0x18) handled immediately
+  &rarr; Line accumulation on \n or \r
+  &rarr; gcode_interface_submit_line() &rarr; FreeRTOS queue (8 slots)
+  &rarr; gcode_exec_task picks line from queue
+    &rarr; "$" prefix: handle_dollar_command() ($$, $#, $I, $G, $H, $X, $J=, $N=value)
+    &rarr; Otherwise: gcode_parse_line() &rarr; gcode_validate_block() &rarr; execute_block()
+      &rarr; compute_target() applies WCS + G92 + TLO + unit conversion
+      &rarr; G0/G1: gcode_planner_line() &rarr; junction velocity &rarr; planner_push_segment()
+      &rarr; G2/G3: gcode_arc_execute() &rarr; linearized line segments
+      &rarr; G38.x: probe segment with ISR detection
+      &rarr; M3/M4/M5: gpio_control_set_spindle()
+    &rarr; Send "ok\r\n" or "error:N\r\n"
+</div>
+
+<h2 id="parser">Parser &amp; Modal State Machine (<code>gcode_parser.c</code>)</h2>
+
+<h3>Parsing Pipeline</h3>
+<ol>
+  <li>Strip comments: <code>(...)</code> inline, <code>;</code> end-of-line</li>
+  <li>Character-by-character tokenization: extract letter-value pairs</li>
+  <li>Dispatch G-codes by integer&times;10 representation (e.g., G38.2 = 382, G43.1 = 431)</li>
+  <li>Modal group conflict detection (error 21 if two G-codes from same group)</li>
+  <li>Populate <code>gcode_block_t</code> with all parsed data</li>
+</ol>
+
+<h3>Modal Groups</h3>
+<table>
+  <tr><th>Group</th><th>Name</th><th>Codes</th><th>Default</th></tr>
+  <tr><td>1</td><td>Motion</td><td>G0, G1, G2, G3, G38.2-.5, G80</td><td>G0</td></tr>
+  <tr><td>2</td><td>Plane</td><td>G17, G18, G19</td><td>G17 (XY)</td></tr>
+  <tr><td>5</td><td>Feed mode</td><td>G93, G94</td><td>G94</td></tr>
+  <tr><td>6</td><td>Distance</td><td>G90, G91</td><td>G90 (abs)</td></tr>
+  <tr><td>7</td><td>Units</td><td>G20, G21</td><td>G21 (mm)</td></tr>
+  <tr><td>8</td><td>TLO</td><td>G43.1, G49</td><td>G49 (none)</td></tr>
+  <tr><td>12</td><td>WCS</td><td>G54-G59</td><td>G54</td></tr>
+  <tr><td>13</td><td>Path control</td><td>G61, G64</td><td>G64 (blend)</td></tr>
+  <tr><td>16</td><td>Arc distance</td><td>G90.1, G91.1</td><td>G91.1 (inc)</td></tr>
+</table>
+
+<h3>Key Data Structures</h3>
+<h4><code>gcode_block_t</code> &mdash; Parsed result from one line</h4>
+<ul>
+  <li><code>word_bits</code> &mdash; Bitmask of which words appeared (X, Y, Z, F, I, J, K, R, etc.)</li>
+  <li><code>motion_mode</code> &mdash; G0/G1/G2/G3/G38.x/G80</li>
+  <li><code>non_modal_command</code> &mdash; G4/G10/G28/G30/G53/G92</li>
+  <li><code>values[6]</code> &mdash; Axis values (X-C), <code>ijk[3]</code>, <code>f_value</code>, <code>s_value</code>, <code>r_value</code>, <code>p_value</code></li>
+</ul>
+
+<h4><code>gcode_state_t</code> &mdash; Persistent modal state across lines</h4>
+<ul>
+  <li>Active modal modes (motion, plane, distance, units, feed mode, path control)</li>
+  <li><code>wcs[6][6]</code> &mdash; G54-G59 offsets per axis</li>
+  <li><code>g92_offset[6]</code>, <code>g28_position[6]</code>, <code>g30_position[6]</code></li>
+  <li><code>position[6]</code> &mdash; Current machine position (mm)</li>
+  <li><code>probe_position[6]</code> &mdash; Last probe result</li>
+  <li><code>feed_rate</code> (mm/min), <code>spindle_speed</code> (RPM)</li>
+  <li><code>exact_stop</code> (G61=true, G64=false), <code>path_tolerance</code> (G64 P value)</li>
+</ul>
+
+
+<!-- ============================================================ -->
+<h2 id="lookahead">Look-Ahead Planner (<code>gcode_planner.c</code>)</h2>
+<p>
+  64-slot circular buffer that sits <strong>above</strong> the existing 128-slot ring buffer.
+  Computes junction velocities via forward/backward passes, then emits pre-planned
+  <code>wcnc_motion_segment_t</code> to the ring buffer. Includes a one-move corner-smoothing
+  buffer that inserts rounding arcs at sharp corners when G64 P tolerance is active.
+</p>
+
+<div class="info">
+  <strong>Key insight:</strong> Core 1 code (motion_control, stepper, planner ring buffer)
+  is <strong>completely untouched</strong>. The look-ahead planner outputs the same segment
+  format the binary protocol uses.
+</div>
+
+<h3>Block Addition Pipeline (<code>gcode_planner_line()</code>)</h3>
+<ol>
+  <li><strong>Geometry:</strong> Compute delta mm &rarr; steps, distance, unit vector, step_event_count</li>
+  <li><strong>Axis-limited max speed:</strong> For each axis, <code>limit = max_rate[i] / |unit_vec[i]|</code>. Clamp nominal to minimum.</li>
+  <li><strong>Axis-limited acceleration:</strong> Same approach for acceleration.</li>
+  <li><strong>Junction entry speed:</strong> Dot product of prev/current unit vectors &rarr; cornering speed (see below)</li>
+  <li><strong>Backward pass:</strong> Walk newest&rarr;oldest, ensure kinematic feasibility</li>
+  <li><strong>Forward pass:</strong> Walk oldest&rarr;newest, clamp entry speeds to achievable values</li>
+  <li><strong>Adaptive emission:</strong> Emit settled blocks based on ring buffer fill level</li>
+</ol>
+
+
+<!-- ============================================================ -->
+<h2 id="junction">Junction Velocity &mdash; Constant Velocity Vectoring (G64)</h2>
+
+<h3>G64 Mode (Default &mdash; Path Blending)</h3>
+<p>
+  The machine maintains speed through corners instead of stopping. Junction speed is computed
+  from the angle between consecutive move vectors and a configurable deviation parameter.
+</p>
+
+<h4>Algorithm (GRBL Junction Deviation Method)</h4>
+<pre>
+cos_theta = dot(prev_unit_vec, current_unit_vec)
+sin_half  = sqrt(0.5 * (1.0 - cos_theta))
+
+effective_deviation = max(junction_deviation, path_tolerance)
+
+if sin_half &gt; 0.99:
+    v_junction = 0                <span class="comment">// Direction reversal, must stop</span>
+elif sin_half &lt; 0.006:
+    v_junction = INFINITY         <span class="comment">// Straight line, no speed limit</span>
+else:
+    v_junction = sqrt(accel * effective_deviation * sin_half / (1.0 - sin_half))
+
+v_junction = min(v_junction, prev_nominal, current_nominal)
+</pre>
+
+<h4>Configuration</h4>
+<table>
+  <tr><th>Setting</th><th>NVS Key</th><th>Default</th><th>Effect</th></tr>
+  <tr><td><code>$11</code></td><td><code>junc_dev</code></td><td>0.01 mm</td><td>Junction deviation tolerance</td></tr>
+  <tr><td><code>G64 Pn</code></td><td>&mdash;</td><td>0 mm</td><td>Path tolerance (overrides $11 if larger)</td></tr>
+</table>
+
+<h3>G61 Mode (Exact Stop)</h3>
+<p>
+  Every move decelerates to zero at its endpoint. <code>max_entry_speed = 0</code> for all blocks.
+  Use for precision positioning (drilling, probing).
+</p>
+
+<h3>Adaptive Emission</h3>
+<p>
+  The emission logic monitors downstream ring buffer fill level to prevent underruns:
+</p>
+<table>
+  <tr><th>Ring Buffer State</th><th>Look-Ahead Depth</th><th>Behaviour</th></tr>
+  <tr><td>&gt;75% empty</td><td>1 block</td><td>Emergency: emit immediately</td></tr>
+  <tr><td>&gt;50% empty</td><td>8 blocks</td><td>Reduced planning quality</td></tr>
+  <tr><td>&le;50% empty</td><td>20 blocks</td><td>Normal: full velocity optimization</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="corner-smooth">Corner Smoothing (<code>gcode_planner.c</code>)</h2>
+<p>
+  When <code>G64 P&lt;tolerance&gt;</code> is active with a non-zero tolerance, the planner
+  inserts rounding arcs at sharp corners so the machine curves through them instead of
+  decelerating to the junction speed. This allows much higher sustained feed rates through
+  complex toolpaths.
+</p>
+
+<h3>Architecture: One-Move Lookahead</h3>
+<p>
+  A one-move buffer sits between the G-code executor and the planner. Only G1 linear feed
+  moves go through the smoother &mdash; G0 rapids, arcs, and probes bypass it and flush
+  the buffer first.
+</p>
+<pre>
+G-code executor
+    &darr;
+gcode_planner_line_smooth()    <span class="comment">// Buffers one move, detects corners</span>
+    &darr;
+gcode_planner_line()           <span class="comment">// Unchanged, adds to look-ahead buffer</span>
+    &darr;
+ring buffer &rarr; stepper ISR
+</pre>
+
+<h3>Corner Detection &amp; Rounding</h3>
+<p>
+  When two consecutive G1 moves form a corner with turn angle &gt;18&deg;, the smoother:
+</p>
+<ol>
+  <li>Computes the turn angle &alpha; from direction vectors</li>
+  <li>Calculates rounding radius: <code>R = tolerance / (1 - cos(&alpha;/2))</code></li>
+  <li>Calculates tangent length: <code>t = R &times; tan(&alpha;/2)</code></li>
+  <li>Shortens the first move to an approach point (<code>corner - t &times; prev_dir</code>)</li>
+  <li>Inserts 2&ndash;10 arc segments from approach to departure point</li>
+  <li>Buffers the remainder of the second move for the next corner check</li>
+</ol>
+
+<h3>Rounding Geometry</h3>
+<pre>
+                   approach
+      prev_move ----&bull;
+                     \  &larr; rounding arc (radius R)
+                      &cir; (programmed corner)
+                     /
+      new_move  ----&bull;
+                   departure
+
+Deviation = R &times; (1 - cos(&alpha;/2)) = G64 P tolerance
+Arc segments use Gram-Schmidt orthogonalization for N-dimensional axis space
+</pre>
+
+<h3>Skip Conditions</h3>
+<ul>
+  <li>G61 (exact stop) active or G64 P0</li>
+  <li>Turn angle &lt; 18&deg; (nearly straight) or &gt; 162&deg; (near-reversal)</li>
+  <li>Either move shorter than 0.01 mm</li>
+  <li>Tangent length exceeds 40% of either move</li>
+</ul>
+
+<h3>Example</h3>
+<pre>
+G64 P0.05         <span class="comment">; 0.05mm path tolerance</span>
+G1 X100 F600      <span class="comment">; First move</span>
+G1 Y100           <span class="comment">; 90&deg; corner &rarr; R=0.17mm rounding arc inserted</span>
+                   <span class="comment">; Machine curves through at near-full speed</span>
+                   <span class="comment">; Max deviation from programmed path: 0.05mm</span>
+</pre>
+
+
+<!-- ============================================================ -->
+<h2 id="arcs">Arc Interpolation (<code>gcode_arcs.c</code>)</h2>
+<p>
+  Converts G2 (CW) and G3 (CCW) arcs into short line segments. Supports:
+</p>
+<ul>
+  <li><strong>IJK format:</strong> Center offset from current position (<code>G2 X10 Y0 I5 J0</code>)</li>
+  <li><strong>R format:</strong> Radius specification (<code>G2 X10 Y0 R5</code>)</li>
+  <li><strong>All planes:</strong> G17 (XY), G18 (ZX), G19 (YZ)</li>
+  <li><strong>Helical motion:</strong> Linear interpolation on the axis perpendicular to the arc plane</li>
+  <li><strong>Full circles:</strong> When start == end in the arc plane</li>
+</ul>
+
+<h3>Segment Count Calculation</h3>
+<pre>
+theta_per_segment = 2 * acos(1 - tolerance / radius)
+segments = ceil(|angular_travel| / theta_per_segment)
+segments = clamp(segments, 1, 2000)
+</pre>
+<p>
+  Arc tolerance is configurable via <code>$12</code> (default 0.002 mm). Smaller tolerance = more segments = smoother arcs.
+  Last segment always uses exact target coordinates to prevent floating-point drift.
+</p>
+
+
+<!-- ============================================================ -->
+<h2 id="probing">Probing (G38.x)</h2>
+<table>
+  <tr><th>G-Code</th><th>Direction</th><th>Error on No Contact</th></tr>
+  <tr><td>G38.2</td><td>Toward workpiece</td><td>Yes (alarm 4)</td></tr>
+  <tr><td>G38.3</td><td>Toward workpiece</td><td>No</td></tr>
+  <tr><td>G38.4</td><td>Away from workpiece</td><td>Yes (alarm 4)</td></tr>
+  <tr><td>G38.5</td><td>Away from workpiece</td><td>No</td></tr>
+</table>
+
+<h3>Probe Sequence</h3>
+<ol>
+  <li>Flush all pending motion (<code>gcode_planner_sync</code>)</li>
+  <li>Wait for stepper to complete</li>
+  <li>Push single segment with <code>WCNC_SEG_FLAG_PROBE | WCNC_SEG_FLAG_LAST</code></li>
+  <li>Stepper ISR checks probe pin on every step tick via direct GPIO register read</li>
+  <li>On trigger: ISR sets <code>probe_triggered = true</code>, stops immediately</li>
+  <li>Record position from stepper counter as probe result</li>
+  <li>Probe position queryable via <code>$#</code> (PRB field) or <code>?</code> status</li>
+</ol>
+
+
+<!-- ============================================================ -->
+<h2 id="jogging">Jog Commands (<code>gcode_jog.c</code>)</h2>
+<pre>
+$J=G91 X10 F1000       <span class="comment">// Jog X +10mm at 1000mm/min (incremental)</span>
+$J=G90 X0 Y0 F500      <span class="comment">// Jog to X0 Y0 at 500mm/min (absolute)</span>
+$J=G21 G91 Z-5 F200    <span class="comment">// Jog Z -5mm in metric</span>
+</pre>
+<p>
+  Supports G90/G91 (distance mode), G20/G21 (units), any axis (X-C), F (feed rate required).
+  Jog moves cancel on feed hold.
+</p>
+
+
+<!-- ============================================================ -->
+<h2 id="grbl-settings">GRBL Settings (<code>grbl_settings.c</code>)</h2>
+<p>
+  Maps GRBL <code>$N=value</code> commands to the NVS configuration system with automatic unit conversion.
+</p>
+
+<table>
+  <tr><th>$N</th><th>NVS Key</th><th>Description</th><th>Conversion</th></tr>
+  <tr><td>$0</td><td><code>pulse_us</code></td><td>Step pulse time (us)</td><td>None</td></tr>
+  <tr><td>$1</td><td><code>idle_ms</code></td><td>Step idle delay (ms)</td><td>None</td></tr>
+  <tr><td>$2</td><td><code>inv_step</code></td><td>Step port invert mask</td><td>None</td></tr>
+  <tr><td>$3</td><td><code>inv_dir</code></td><td>Dir port invert mask</td><td>None</td></tr>
+  <tr><td>$5</td><td><code>inv_lim</code></td><td>Limit pin invert mask</td><td>None</td></tr>
+  <tr><td>$6</td><td><code>inv_prb</code></td><td>Probe pin invert</td><td>None</td></tr>
+  <tr><td>$11</td><td><code>junc_dev</code></td><td>Junction deviation (mm)</td><td>None</td></tr>
+  <tr><td>$12</td><td><code>arc_tol</code></td><td>Arc tolerance (mm)</td><td>None</td></tr>
+  <tr><td>$23</td><td><code>hm_dir</code></td><td>Homing dir invert mask</td><td>None</td></tr>
+  <tr><td>$24</td><td><code>hm_feed</code></td><td>Homing feed (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
+  <tr><td>$25</td><td><code>hm_seek</code></td><td>Homing seek (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
+  <tr><td>$27</td><td><code>hm_pull</code></td><td>Homing pull-off (mm)</td><td>mm &rarr; steps</td></tr>
+  <tr><td>$100-$105</td><td><code>spm_x..spm_c</code></td><td>Steps/mm per axis</td><td>None (float)</td></tr>
+  <tr><td>$110-$115</td><td><code>rate_x..rate_c</code></td><td>Max rate (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
+  <tr><td>$120-$125</td><td><code>acc_x..acc_c</code></td><td>Accel (mm/sec&sup2;)</td><td>mm/sec&sup2; &rarr; steps/sec&sup2;</td></tr>
+  <tr><td>$130-$132</td><td><code>trvl_x..trvl_z</code></td><td>Max travel (mm)</td><td>None</td></tr>
+  <tr><td>$40</td><td><code>jerk_max</code></td><td>Max jerk (mm/sec&sup3;)</td><td>None (float). 0 = trapezoidal.</td></tr>
+</table>
+
+<div class="warning">
+  <strong>Unit conversion:</strong> NVS stores rates as steps/sec and accel as steps/sec&sup2;.
+  GRBL $settings use mm/min and mm/sec&sup2;. The conversion uses the axis's steps/mm value from NVS.
+  Changing $100 (steps/mm) affects the interpretation of $110 (max rate) and $120 (accel).
+</div>
+
+
+<!-- ============================================================ -->
+<h2 id="realtime">Real-Time Commands</h2>
+<p>
+  These bytes are detected in the raw byte stream and handled immediately (not queued):
+</p>
+<table>
+  <tr><th>Byte</th><th>Character</th><th>Action</th></tr>
+  <tr><td><code>0x3F</code></td><td><code>?</code></td><td>Send GRBL-format status report</td></tr>
+  <tr><td><code>0x21</code></td><td><code>!</code></td><td>Feed hold &mdash; controlled deceleration to stop</td></tr>
+  <tr><td><code>0x7E</code></td><td><code>~</code></td><td>Cycle start / resume from hold</td></tr>
+  <tr><td><code>0x18</code></td><td>Ctrl-X</td><td>Soft reset with full position preservation</td></tr>
+</table>
+
+<h3>Soft Reset Sequence (Ctrl-X)</h3>
+<ol>
+  <li><code>motion_estop()</code> &mdash; stops steppers, position preserved in counter</li>
+  <li><code>gcode_planner_clear()</code> &mdash; discards look-ahead blocks, position NOT zeroed</li>
+  <li><code>planner_clear()</code> &mdash; discards ring buffer segments</li>
+  <li><code>motion_reset()</code> &mdash; state &rarr; IDLE</li>
+  <li><code>gcode_planner_sync_position()</code> &mdash; reads actual stepper position</li>
+  <li>Parser re-initialized to defaults (G54, G17, G90, G21, G64), position preserved</li>
+  <li>Line queue flushed, welcome message sent</li>
+</ol>
+
+
+<!-- ============================================================ -->
+<h2 id="status-report">Status Report Format</h2>
+<pre>
+&lt;Idle|MPos:0.000,0.000,0.000,0.000,0.000,0.000|FS:0,0|Bf:120,45&gt;
+&lt;Run|MPos:35.123,20.456,-5.000,0.000,0.000,0.000|FS:600,12000|Bf:98,32|WCO:10.000,5.000,0.000&gt;
+</pre>
+<table>
+  <tr><th>Field</th><th>Description</th><th>Source</th></tr>
+  <tr><td>State</td><td>Idle, Run, Hold:0, Jog, Home, Alarm, Check</td><td><code>motion_get_state()</code></td></tr>
+  <tr><td>MPos</td><td>Machine position in mm (always authoritative)</td><td><code>stepper_get_position() / steps_per_mm</code></td></tr>
+  <tr><td>FS</td><td>Feed rate (mm/min), spindle speed (RPM)</td><td><code>stepper_get_feed_rate()</code></td></tr>
+  <tr><td>Bf</td><td>Ring buffer free, look-ahead buffer free</td><td><code>planner_available()</code>, <code>gcode_planner_available()</code></td></tr>
+  <tr><td>WCO</td><td>Work coordinate offset (sent every 10th query)</td><td><code>s_state.wcs[] + g92_offset[]</code></td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="transports">Transports</h2>
+
+<h3>Telnet (<code>gcode_telnet.c</code>) &mdash; Port 23</h3>
+<ul>
+  <li>Single-client TCP server</li>
+  <li>Sends GRBL welcome on connect: <code>Grbl 1.1h ['$' for help]\r\n</code></li>
+  <li>100ms receive timeout for periodic disconnect checking</li>
+  <li>Telnet IAC sequences (0xFF) automatically skipped</li>
+  <li>Backspace/delete support</li>
+  <li>Sets output callback to <code>send(sock, ...)</code></li>
+</ul>
+
+<h3>UART (<code>gcode_uart.c</code>) &mdash; USB Serial</h3>
+<ul>
+  <li>UART0 at 115200 baud (TX=GPIO43, RX=GPIO44 on S3)</li>
+  <li>Same byte processing logic as telnet</li>
+  <li>Sets output callback to <code>uart_write_bytes()</code></li>
+  <li>Always active (no connect/disconnect)</li>
+</ul>
+
+<div class="warning">
+  <strong>Output conflict:</strong> Both telnet and UART can set the output callback.
+  The last one to connect wins. In practice, use one or the other, not both simultaneously.
+  The telnet handler clears the callback on disconnect.
+</div>
+
+
+<!-- ============================================================ -->
+<h1 id="protocol">Binary Protocol Specification</h1>
+<p>
+  Magic: <code>0x574D4333</code> ("WMC3"), Protocol version: 1, CRC-16/CCITT checksum.
+</p>
+
+<h3>Packet Header (18 bytes)</h3>
+<pre>
+typedef struct {
+    uint32_t magic;             <span class="comment">// 0x574D4333</span>
+    uint8_t  version;           <span class="comment">// 1</span>
+    uint8_t  packet_type;       <span class="comment">// WCNC_PKT_*</span>
+    uint16_t payload_length;    <span class="comment">// Bytes after header</span>
+    uint32_t sequence;          <span class="comment">// Incrementing counter</span>
+    uint32_t timestamp;         <span class="comment">// Milliseconds</span>
+    uint16_t checksum;          <span class="comment">// CRC-16/CCITT over entire packet</span>
+} wcnc_header_t;
+</pre>
+
+<h3>Motion Segment Format</h3>
+<pre>
+typedef struct {
+    int32_t  steps[6];          <span class="comment">// Step count per axis (signed)</span>
+    uint32_t duration_us;       <span class="comment">// Segment duration (unused by stepper)</span>
+    uint32_t entry_speed_sqr;   <span class="comment">// Entry speed squared / 1000</span>
+    uint32_t exit_speed_sqr;    <span class="comment">// Exit speed squared / 1000</span>
+    uint32_t acceleration;      <span class="comment">// Acceleration * 100 (steps/sec&sup2;)</span>
+    uint16_t segment_id;        <span class="comment">// Tracking ID</span>
+    uint8_t  flags;             <span class="comment">// WCNC_SEG_FLAG_*</span>
+} wcnc_motion_segment_t;
+</pre>
+
+<h3>Segment Flags</h3>
+<table>
+  <tr><th>Flag</th><th>Value</th><th>Meaning</th></tr>
+  <tr><td><code>WCNC_SEG_FLAG_RAPID</code></td><td>0x01</td><td>Rapid traverse (G0)</td></tr>
+  <tr><td><code>WCNC_SEG_FLAG_LAST</code></td><td>0x02</td><td>Last segment in sequence</td></tr>
+  <tr><td><code>WCNC_SEG_FLAG_PROBE</code></td><td>0x04</td><td>Probe move (check probe pin)</td></tr>
+  <tr><td><code>WCNC_SEG_FLAG_EXACT_STOP</code></td><td>0x08</td><td>Decel to zero at end</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="io-control">IO Control Packet (PC &rarr; ESP32, UDP)</h2>
+<p>
+  Controls spindle, coolant, and misc outputs. Sent via UDP alongside motion packets.
+  The ESP32 stores these states and reports them back in the status report (ground truth).
+</p>
+<pre>
+typedef struct {
+    wcnc_header_t header;
+    uint8_t  misc_outputs;    <span class="comment">// Bitmask: bit 0..4 misc output states</span>
+    uint8_t  spindle_state;   <span class="comment">// 0=off, 1=CW, 2=CCW</span>
+    uint16_t spindle_rpm;     <span class="comment">// Target RPM (0..max_rpm)</span>
+    uint8_t  coolant_state;   <span class="comment">// bit 0=flood, bit 1=mist</span>
+    uint8_t  reserved[3];
+} wcnc_io_control_packet_t;  <span class="comment">// Total: 26 bytes</span>
+</pre>
+
+<h3>Mach3 Plugin: Misc Output Triggers</h3>
+<p>
+  Misc outputs (EXTACT1&ndash;5) are controlled via G-code or the Mach3 UI.
+  The plugin activates <code>Engine-&gt;OutSigs[EXTACT1..5].active = true</code> at init
+  so Mach3 processes these commands.
+</p>
+<table>
+  <tr><th>G-code</th><th>Type</th><th>Effect</th></tr>
+  <tr><td><code>M62 P0</code></td><td>Synced with motion</td><td>Turn ON misc output 1 (EXTACT1)</td></tr>
+  <tr><td><code>M63 P0</code></td><td>Synced with motion</td><td>Turn OFF misc output 1 (EXTACT1)</td></tr>
+  <tr><td><code>M64 P0</code></td><td>Immediate</td><td>Turn ON misc output 1 (EXTACT1)</td></tr>
+  <tr><td><code>M65 P0</code></td><td>Immediate</td><td>Turn OFF misc output 1 (EXTACT1)</td></tr>
+  <tr><td colspan="3" style="color: var(--fg2);"><em>P parameter is 0-indexed: P0=Misc1, P1=Misc2, P2=Misc3, P3=Misc4, P4=Misc5</em></td></tr>
+</table>
+<p>
+  <strong>Plugin paths:</strong> M62/M63 &rarr; trajectory buffer &rarr; <code>COMEXT1ON/OFF</code> &rarr; <code>HandleTrajCommand()</code>
+  &rarr; <code>SendIOControl()</code>. M64/M65 &rarr; <code>Engine-&gt;OutSigs[EXTACT1..5]</code> &rarr; Phase&nbsp;11b polling
+  &rarr; <code>SendIOControl()</code>.
+</p>
+
+<h3>Status Report Extended Fields (v1.1)</h3>
+<p>Offset 46&ndash;49 of the status report payload (total 50 bytes):</p>
+<table>
+  <tr><th>Field</th><th>Offset</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>misc_outputs</code></td><td>46</td><td>u8</td><td>Bitmask of active misc outputs</td></tr>
+  <tr><td><code>misc_inputs</code></td><td>47</td><td>u8</td><td>Bitmask of misc input states</td></tr>
+  <tr><td><code>spindle_state</code></td><td>48</td><td>u8</td><td>0=off, 1=CW, 2=CCW (from last IO control)</td></tr>
+  <tr><td><code>coolant_state</code></td><td>49</td><td>u8</td><td>bit 0=flood, bit 1=mist (from last IO control)</td></tr>
+</table>
+
+<div class="info">
+  <strong>Ground truth:</strong> The config dialog reads spindle/coolant/misc states from the ESP32
+  status report, not from Mach3 Engine fields. This eliminates the garbage-value problem where
+  <code>Engine-&gt;SpindleCW</code> can contain non-boolean values (e.g. 7).
+</div>
+
+
+<h2 id="status-led">Status LED Module (<code>io/status_led.c</code>)</h2>
+<p>
+  Drives the onboard LED with connection/state indication. Supports WS2812 RGB LEDs
+  on ESP32-S3 boards via the RMT peripheral.
+</p>
+<table>
+  <tr><th>State</th><th>WS2812 (S3 boards)</th><th>Plain LED (WROOM-32)</th></tr>
+  <tr><td>Disconnected (no host)</td><td style="color: #ff4444;">Red, slow blink</td><td>Off</td></tr>
+  <tr><td>Connected, idle</td><td style="color: #4488ff;">Blue, solid</td><td>On, solid</td></tr>
+  <tr><td>Connected, running</td><td style="color: #44cc44;">Green, solid</td><td>On, slow blink</td></tr>
+  <tr><td>Alarm / E-stop</td><td style="color: #cccc00;">Yellow, fast blink</td><td>On, fast blink</td></tr>
+</table>
+<p>
+  Board LED pins: S3-Zero = GPIO 21, S3-DevKitC = GPIO 48, WROOM-32 = GPIO 2.
+  Colours are intentionally dim (20/255 brightness) to avoid distraction.
+</p>
+
+
+<!-- ============================================================ -->
+<h2 id="coexistence">Binary / G-Code Coexistence</h2>
+<p>
+  Both the binary protocol (Mach3/LinuxCNC) and G-code interpreter share the same planner ring buffer
+  via <code>planner_push_segment()</code>. They are mutually exclusive at the motion level:
+</p>
+
+<h3>Preemption Mechanism</h3>
+<ol>
+  <li>When binary protocol receives <code>PKT_MOTION_SEGMENT</code>, it calls <code>gcode_planner_preempt()</code></li>
+  <li>This sets <code>s_planner.preempted = true</code></li>
+  <li>The G-code look-ahead planner checks this flag before every <code>planner_push_segment()</code> call and pauses emission</li>
+  <li>Un-emitted look-ahead blocks are retained &mdash; no data loss</li>
+  <li>When binary protocol sends <code>PKT_RESET</code>, it calls <code>gcode_planner_release()</code></li>
+  <li>G-code planner resumes emission</li>
+</ol>
+
+<div class="info">
+  <strong>Practical usage:</strong> Connect UGS via telnet for G-code testing.
+  Connect Mach3 via binary protocol for production. They can coexist on the same firmware;
+  binary takes priority when it starts sending motion.
+</div>
+
+
+<!-- ============================================================ -->
+<h1 id="constant-velocity">Critical Behaviour: Constant Velocity Vectoring</h1>
+<p>
+  The #1 requirement for quality CNC motion. Without it, the machine stops between every G1 move,
+  producing faceted surfaces and slow cycle times.
+</p>
+
+<h3>How It Works</h3>
+<p>
+  When G64 is active (default), the planner computes a non-zero junction speed for every corner.
+  The stepper never decelerates to zero unless:
+</p>
+<ul>
+  <li>Direction reversal on any axis (must stop)</li>
+  <li>Junction angle too sharp (unless corner smoothing inserts a rounding arc)</li>
+  <li>G61 exact stop mode is active</li>
+  <li>End of program (M2/M30)</li>
+</ul>
+
+<h3>Example: 90-Degree Corner</h3>
+<pre>
+G64 P0.01         <span class="comment">; Path blending, 0.01mm tolerance</span>
+G1 X100 F600      <span class="comment">; Move X at 600mm/min</span>
+G1 Y100           <span class="comment">; 90-degree turn to Y</span>
+                   <span class="comment">; Junction speed: ~30mm/min (computed from deviation)</span>
+                   <span class="comment">; Machine rounds the corner smoothly</span>
+</pre>
+<pre>
+G61               <span class="comment">; Exact stop mode</span>
+G1 X100 F600      <span class="comment">; Move X at 600mm/min</span>
+G1 Y100           <span class="comment">; Full stop at corner, then accelerate to Y</span>
+                   <span class="comment">; Junction speed: 0mm/min (exact stop)</span>
+</pre>
+
+
+<!-- ============================================================ -->
+<h2 id="underrun">Critical Behaviour: Buffer Underrun Recovery</h2>
+<p>
+  If the ring buffer runs dry (WiFi dropout, sender stall, heavy computation):
+</p>
+<ol>
+  <li>Motion control task transitions to IDLE (existing behaviour)</li>
+  <li><strong>Position is preserved</strong> &mdash; stepper position counter is always accurate</li>
+  <li>When new segments arrive, motion_control_task pops and resumes RUN &mdash; seamless</li>
+  <li><code>planner->underrun_count</code> increments for diagnostics</li>
+  <li>Adaptive emission kicks in: look-ahead depth reduces to 1 to feed buffer ASAP</li>
+</ol>
+<div class="info">
+  <strong>No data loss:</strong> The look-ahead buffer retains un-emitted blocks.
+  A WiFi dropout only delays emission, never loses planned moves.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 id="estop-recovery">Critical Behaviour: E-Stop Position Preservation</h2>
+<p>
+  This solves the Mach3 + SmoothStepper problem where E-stop loses position sync
+  and the job can never resume.
+</p>
+
+<div class="critical">
+  <strong>Core principle:</strong> Position is always authoritative on the ESP32.
+  The host reads position from the controller, never the other way around.
+</div>
+
+<h3>E-Stop Recovery Workflow</h3>
+<pre>
+1. E-stop triggered
+   &rarr; stepper_estop(): stops timer, disables outputs
+   &rarr; position[] PRESERVED (not zeroed)
+   &rarr; state &rarr; ESTOP
+
+2. User fixes issue, sends Reset (Ctrl-X or PKT_RESET)
+   &rarr; gcode_planner_clear(): discards look-ahead, position untouched
+   &rarr; planner_clear(): discards ring buffer
+   &rarr; motion_reset(): state &rarr; IDLE
+   &rarr; gcode_planner_sync_position(): reads actual stepper position
+
+3. Query position
+   &rarr; "?" returns: &lt;Idle|MPos:35.000,20.000,-5.000,...&gt;
+   &rarr; This IS the real physical position where the machine stopped
+
+4. Resume
+   &rarr; G-code sender reads MPos, knows exact position
+   &rarr; Can re-home, continue from known position, or restart job
+   &rarr; No phantom position drift, no lost steps in the controller
+</pre>
+
+
+<!-- ============================================================ -->
+<h2 id="comms-isolation">Critical Behaviour: Comms/Motion Isolation</h2>
+<ul>
+  <li><strong>Core 0:</strong> All comms (WiFi, telnet, UART, UDP, TCP, G-code processing)</li>
+  <li><strong>Core 1:</strong> All motion (stepper ISR, motion control task) &mdash; never interrupted by WiFi</li>
+  <li><strong>Stepper ISR in IRAM:</strong> No flash access, no cache misses</li>
+  <li><strong>Direct GPIO register writes:</strong> Sub-microsecond pin toggling via <code>gpio_ll_set_level()</code></li>
+  <li><strong>Lock-free ring buffer:</strong> No mutexes between cores</li>
+  <li><strong>Pre-buffered operation:</strong> 128-slot ring buffer = ~2-5 seconds of buffered motion. WiFi glitch for 100ms is invisible.</li>
+  <li><strong>No allocations in motion path:</strong> All buffers statically allocated</li>
+</ul>
+
+
+<!-- ============================================================ -->
+<h1 id="build">Building &amp; Flashing</h1>
+
+<h3>Prerequisites</h3>
+<ul>
+  <li>ESP-IDF v5.x (tested with 5.1+)</li>
+  <li>Python 3.x (for ESP-IDF tools)</li>
+</ul>
+
+<h3>Board Selection</h3>
+<p>
+  The board define controls which pin assignments are loaded from <code>pin_config.h</code> at compile time.
+  It must be set in the build configuration for whichever build system you use:
+</p>
+
+<h4>PlatformIO (recommended)</h4>
+<p>
+  Edit <code>firmware/platformio.ini</code>, change the <code>-DBOARD_*</code> flag in <code>build_flags</code>:
+</p>
+<pre>
+build_flags =
+    -DBOARD_ESP32S3_ZERO       <span class="comment">; &larr; change this line</span>
+    -I../../protocol
+</pre>
+
+<h4>ESP-IDF (idf.py)</h4>
+<p>
+  Auto-detected from IDF target in <code>pin_config.h</code> (S3 &rarr; DevKitC, ESP32 &rarr; WROOM32).
+  Override with a cmake define if needed:
+</p>
+<pre>
+idf.py build -DBOARD_ESP32S3_ZERO
+</pre>
+
+<h4>Available Boards</h4>
+<table>
+  <tr><th>Define</th><th>Board</th><th>Notes</th></tr>
+  <tr><td><code>BOARD_ESP32S3_ZERO</code></td><td>Waveshare ESP32-S3-Zero</td><td>Compact, limited GPIO, no charge pump</td></tr>
+  <tr><td><code>BOARD_ESP32S3_DEVKITC</code></td><td>ESP32-S3-DevKitC-1</td><td>Most GPIO, charge pump + 2 misc outputs</td></tr>
+  <tr><td><code>BOARD_ESP32_WROOM32</code></td><td>ESP32-WROOM-32</td><td>Classic ESP32, input-only GPIOs</td></tr>
+</table>
+
+<h3>Build &amp; Flash</h3>
+
+<h4>PlatformIO</h4>
+<pre>
+cd firmware
+pio run                          <span class="comment"># Build</span>
+pio run -t upload                <span class="comment"># Flash</span>
+pio device monitor               <span class="comment"># Serial monitor</span>
+pio run -t upload -t monitor     <span class="comment"># All in one</span>
+</pre>
+
+<h4>ESP-IDF</h4>
+<pre>
+cd firmware
+idf.py set-target esp32s3
+idf.py build
+idf.py -p COMx flash monitor
+</pre>
+
+
+<!-- ============================================================ -->
+<h2 id="connecting">Connecting G-Code Senders</h2>
+
+<h3>UGS (Universal G-code Sender)</h3>
+<ol>
+  <li>Connection type: <strong>Serial</strong></li>
+  <li>Port: <code>socket://&lt;ESP32_IP&gt;:23</code></li>
+  <li>Firmware: <strong>GRBL</strong></li>
+  <li>Click Connect</li>
+</ol>
+
+<h3>CNCjs</h3>
+<ol>
+  <li>Connection: Serial port</li>
+  <li>Port: <code>socket://&lt;ESP32_IP&gt;:23</code></li>
+  <li>Controller type: Grbl</li>
+</ol>
+
+<h3>bCNC</h3>
+<ol>
+  <li>Port: <code>socket://&lt;ESP32_IP&gt;:23</code></li>
+  <li>Controller: GRBL1</li>
+</ol>
+
+<h3>Serial Terminal (direct USB)</h3>
+<ol>
+  <li>Connect USB cable to ESP32</li>
+  <li>Open terminal at 115200 baud, 8N1</li>
+  <li>Type G-code commands directly</li>
+</ol>
+
+<h3>Protocol Test GUI (binary protocol)</h3>
+<pre>
+cd tools
+python protocol_test_gui.py
+</pre>
+<p>Enter the ESP32's IP address and click Connect. Uses the binary protocol on UDP/TCP ports.</p>
+
+
+<!-- ============================================================ -->
+<h2 id="testing">Testing Procedures</h2>
+
+<h3>Basic Connectivity</h3>
+<pre>
+telnet &lt;ESP32_IP&gt; 23
+<span class="comment"># Should see: Grbl 1.1h ['$' for help]</span>
+?
+<span class="comment"># Should see: &lt;Idle|MPos:0.000,0.000,0.000,...&gt;</span>
+$$
+<span class="comment"># Should see all settings dumped</span>
+</pre>
+
+<h3>Motion Test</h3>
+<pre>
+G21              <span class="comment">; Set mm mode</span>
+G90              <span class="comment">; Absolute positioning</span>
+G64 P0.01        <span class="comment">; Path blending with 0.01mm tolerance</span>
+G1 X10 F600      <span class="comment">; Linear move 10mm at 600mm/min</span>
+G1 Y10           <span class="comment">; Should maintain speed through corner</span>
+G1 X0 Y0         <span class="comment">; Return to origin</span>
+?                <span class="comment">; Verify position back at 0,0,0</span>
+</pre>
+
+<h3>Arc Test</h3>
+<pre>
+G2 X10 Y0 I5 J0 F600    <span class="comment">; CW semicircle</span>
+G3 X0 Y0 I-5 J0 F600    <span class="comment">; CCW semicircle back</span>
+</pre>
+
+<h3>E-Stop Recovery Test</h3>
+<pre>
+G1 X100 F600     <span class="comment">; Start long move</span>
+<span class="comment">; During motion: send Ctrl-X (0x18)</span>
+?                <span class="comment">; Check MPos &mdash; should show actual stopped position (e.g. X35.123)</span>
+G1 X0 F600       <span class="comment">; Return to zero from actual position</span>
+?                <span class="comment">; Verify X0.000</span>
+</pre>
+
+<h3>Probe Test</h3>
+<pre>
+G38.2 Z-10 F100  <span class="comment">; Probe toward, expect contact</span>
+$#               <span class="comment">; Check PRB position</span>
+?                <span class="comment">; Verify stopped position matches probe result</span>
+</pre>
+
+
+<!-- ============================================================ -->
+<h2 id="grbl-commands">GRBL Command Reference</h2>
+<table>
+  <tr><th>Command</th><th>Description</th></tr>
+  <tr><td><code>$$</code></td><td>Dump all settings</td></tr>
+  <tr><td><code>$#</code></td><td>Dump coordinate offsets (G54-G59, G28, G30, G92, PRB)</td></tr>
+  <tr><td><code>$G</code></td><td>Dump active modal state</td></tr>
+  <tr><td><code>$I</code></td><td>Build info</td></tr>
+  <tr><td><code>$H</code></td><td>Run homing cycle (all axes)</td></tr>
+  <tr><td><code>$X</code></td><td>Kill alarm / unlock</td></tr>
+  <tr><td><code>$J=...</code></td><td>Jog command (e.g. <code>$J=G91 X10 F1000</code>)</td></tr>
+  <tr><td><code>$N=value</code></td><td>Set setting N (e.g. <code>$100=800</code>)</td></tr>
+  <tr><td><code>$N</code></td><td>Query setting N</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="gcode-ref">Supported G/M Codes</h2>
+
+<h3>G-Codes</h3>
+<table>
+  <tr><th>Code</th><th>Group</th><th>Description</th></tr>
+  <tr><td>G0</td><td>Motion</td><td>Rapid traverse</td></tr>
+  <tr><td>G1</td><td>Motion</td><td>Linear interpolation</td></tr>
+  <tr><td>G2</td><td>Motion</td><td>CW arc (IJK or R format)</td></tr>
+  <tr><td>G3</td><td>Motion</td><td>CCW arc (IJK or R format)</td></tr>
+  <tr><td>G4</td><td>Non-modal</td><td>Dwell (P seconds)</td></tr>
+  <tr><td>G10 L2</td><td>Non-modal</td><td>Set WCS offset</td></tr>
+  <tr><td>G10 L20</td><td>Non-modal</td><td>Set WCS from current position</td></tr>
+  <tr><td>G17</td><td>Plane</td><td>XY plane (default)</td></tr>
+  <tr><td>G18</td><td>Plane</td><td>ZX plane</td></tr>
+  <tr><td>G19</td><td>Plane</td><td>YZ plane</td></tr>
+  <tr><td>G20</td><td>Units</td><td>Inches mode</td></tr>
+  <tr><td>G21</td><td>Units</td><td>Millimeter mode (default)</td></tr>
+  <tr><td>G28</td><td>Non-modal</td><td>Return to G28.1 stored position</td></tr>
+  <tr><td>G28.1</td><td>Non-modal</td><td>Store current position for G28</td></tr>
+  <tr><td>G30</td><td>Non-modal</td><td>Return to G30.1 stored position</td></tr>
+  <tr><td>G30.1</td><td>Non-modal</td><td>Store current position for G30</td></tr>
+  <tr><td>G38.2</td><td>Motion</td><td>Probe toward, error on no contact</td></tr>
+  <tr><td>G38.3</td><td>Motion</td><td>Probe toward, no error</td></tr>
+  <tr><td>G38.4</td><td>Motion</td><td>Probe away, error on no contact</td></tr>
+  <tr><td>G38.5</td><td>Motion</td><td>Probe away, no error</td></tr>
+  <tr><td>G40</td><td>Cutter comp</td><td>Cancel cutter compensation (no-op, Mach3 compat)</td></tr>
+  <tr><td>G43</td><td>TLO</td><td>Tool length offset from tool table (H word selects tool)</td></tr>
+  <tr><td>G43.1</td><td>TLO</td><td>Dynamic tool length offset</td></tr>
+  <tr><td>G49</td><td>TLO</td><td>Cancel tool length offset</td></tr>
+  <tr><td>G53</td><td>Non-modal</td><td>Move in machine coordinates</td></tr>
+  <tr><td>G54-G59</td><td>WCS</td><td>Select work coordinate system</td></tr>
+  <tr><td>G61</td><td>Path</td><td>Exact stop mode</td></tr>
+  <tr><td>G64</td><td>Path</td><td>Constant velocity / path blending (default)</td></tr>
+  <tr><td>G80</td><td>Motion</td><td>Cancel canned cycle</td></tr>
+  <tr><td>G90</td><td>Distance</td><td>Absolute mode (default)</td></tr>
+  <tr><td>G91</td><td>Distance</td><td>Incremental mode</td></tr>
+  <tr><td>G90.1</td><td>Arc dist</td><td>Absolute arc centres</td></tr>
+  <tr><td>G91.1</td><td>Arc dist</td><td>Incremental arc centres (default)</td></tr>
+  <tr><td>G92</td><td>Non-modal</td><td>Set coordinate offset</td></tr>
+  <tr><td>G92.1</td><td>Non-modal</td><td>Clear G92 offset</td></tr>
+  <tr><td>G93</td><td>Feed mode</td><td>Inverse time feed mode</td></tr>
+  <tr><td>G94</td><td>Feed mode</td><td>Units per minute (default)</td></tr>
+</table>
+
+<h3>M-Codes</h3>
+<table>
+  <tr><th>Code</th><th>Description</th></tr>
+  <tr><td>M0</td><td>Program pause (wait for cycle start ~)</td></tr>
+  <tr><td>M1</td><td>Optional stop</td></tr>
+  <tr><td>M2</td><td>Program end</td></tr>
+  <tr><td>M3</td><td>Spindle CW</td></tr>
+  <tr><td>M4</td><td>Spindle CCW</td></tr>
+  <tr><td>M5</td><td>Spindle stop</td></tr>
+  <tr><td>M6</td><td>Tool change (flushes motion, logs tool number)</td></tr>
+  <tr><td>M7</td><td>Mist coolant on</td></tr>
+  <tr><td>M8</td><td>Flood coolant on</td></tr>
+  <tr><td>M9</td><td>All coolant off</td></tr>
+  <tr><td>M30</td><td>Program end and rewind</td></tr>
+  <tr><td>M62 P<em>n</em></td><td>Turn ON misc output <em>n</em> (synced with motion), P0=Misc1 .. P4=Misc5</td></tr>
+  <tr><td>M63 P<em>n</em></td><td>Turn OFF misc output <em>n</em> (synced with motion)</td></tr>
+  <tr><td>M64 P<em>n</em></td><td>Turn ON misc output <em>n</em> (immediate)</td></tr>
+  <tr><td>M65 P<em>n</em></td><td>Turn OFF misc output <em>n</em> (immediate)</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2 id="config-keys">NVS Config Key Reference</h2>
+<table>
+  <tr><th>NVS Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>pulse_us</code></td><td>u16</td><td>3</td><td>Step pulse width (us)</td></tr>
+  <tr><td><code>dir_us</code></td><td>u16</td><td>2</td><td>Dir setup time (us)</td></tr>
+  <tr><td><code>idle_ms</code></td><td>u16</td><td>255</td><td>Stepper idle delay (ms)</td></tr>
+  <tr><td><code>spm_x..c</code></td><td>float</td><td>800.0</td><td>Steps per mm per axis</td></tr>
+  <tr><td><code>rate_x..c</code></td><td>u32</td><td>20000</td><td>Max rate (steps/sec)</td></tr>
+  <tr><td><code>acc_x..c</code></td><td>u32</td><td>5000</td><td>Acceleration (steps/sec&sup2;)</td></tr>
+  <tr><td><code>inv_step</code></td><td>u8</td><td>0x00</td><td>Step pin invert mask</td></tr>
+  <tr><td><code>inv_dir</code></td><td>u8</td><td>0x00</td><td>Dir pin invert mask</td></tr>
+  <tr><td><code>inv_en</code></td><td>u8</td><td>0x00</td><td>Enable pin invert</td></tr>
+  <tr><td><code>inv_lim</code></td><td>u8</td><td>0x3F</td><td>Limit pin invert mask</td></tr>
+  <tr><td><code>inv_hom</code></td><td>u8</td><td>0x3F</td><td>Home pin invert mask</td></tr>
+  <tr><td><code>inv_est</code></td><td>u8</td><td>0x00</td><td>E-stop pin invert</td></tr>
+  <tr><td><code>inv_prb</code></td><td>u8</td><td>0x00</td><td>Probe pin invert</td></tr>
+  <tr><td><code>hm_dir</code></td><td>u8</td><td>0x00</td><td>Homing direction mask</td></tr>
+  <tr><td><code>hm_seek</code></td><td>u32</td><td>5000</td><td>Homing seek rate (steps/sec)</td></tr>
+  <tr><td><code>hm_feed</code></td><td>u32</td><td>500</td><td>Homing feed rate (steps/sec)</td></tr>
+  <tr><td><code>hm_pull</code></td><td>u32</td><td>100</td><td>Homing pulloff (steps)</td></tr>
+  <tr><td><code>junc_dev</code></td><td>float</td><td>0.01</td><td>Junction deviation (mm)</td></tr>
+  <tr><td><code>arc_tol</code></td><td>float</td><td>0.002</td><td>Arc tolerance (mm)</td></tr>
+  <tr><td><code>jerk_max</code></td><td>float</td><td>1000.0</td><td>Max jerk (mm/sec&sup3;), 0=trapezoidal</td></tr>
+  <tr><td><code>trvl_x..z</code></td><td>float</td><td>200.0</td><td>Max travel per axis (mm)</td></tr>
+  <tr><td colspan="4" style="background: var(--bg3); color: var(--green); font-weight: 600;">Pin Assignments (0x0500&ndash;0x0519) &mdash; require reboot</td></tr>
+  <tr><td><code>p_sx..p_sc</code></td><td>u8</td><td>Board-specific</td><td>Step GPIO per axis (X&ndash;C)</td></tr>
+  <tr><td><code>p_dx..p_dc</code></td><td>u8</td><td>Board-specific</td><td>Dir GPIO per axis (X&ndash;C)</td></tr>
+  <tr><td><code>p_en</code></td><td>u8</td><td>Board-specific</td><td>Stepper enable GPIO</td></tr>
+  <tr><td><code>p_lx..p_lc</code></td><td>u8</td><td>Board-specific</td><td>Limit switch GPIO per axis (X&ndash;C)</td></tr>
+  <tr><td><code>p_prb</code></td><td>u8</td><td>Board-specific</td><td>Probe input GPIO</td></tr>
+  <tr><td><code>p_est</code></td><td>u8</td><td>Board-specific</td><td>E-Stop input GPIO</td></tr>
+  <tr><td><code>p_spn</code></td><td>u8</td><td>Board-specific</td><td>Spindle enable GPIO</td></tr>
+  <tr><td><code>p_led</code></td><td>u8</td><td>Board-specific</td><td>Status LED GPIO</td></tr>
+  <tr><td><code>p_cp</code></td><td>u8</td><td>Board-specific</td><td>Charge pump GPIO (if available)</td></tr>
+  <tr><td><code>p_mo0, p_mo1</code></td><td>u8</td><td>Board-specific</td><td>Misc output GPIOs (if available)</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2>Memory Budget</h2>
+<table>
+  <tr><th>Component</th><th>Size</th><th>Location</th></tr>
+  <tr><td>Planner ring buffer (128 &times; 52B)</td><td>6656 B</td><td>Static (BSS)</td></tr>
+  <tr><td>Look-ahead buffer (64 &times; 120B)</td><td>7680 B</td><td>Static (BSS)</td></tr>
+  <tr><td>Line queue (8 &times; 260B)</td><td>2080 B</td><td>FreeRTOS heap</td></tr>
+  <tr><td>Modal state + WCS offsets</td><td>~424 B</td><td>Static (BSS)</td></tr>
+  <tr><td>Telnet + UART buffers</td><td>~1536 B</td><td>Stack + static</td></tr>
+  <tr><td>GRBL settings cache + scratch</td><td>~512 B</td><td>Stack</td></tr>
+  <tr><td>Stepper state (DRAM)</td><td>~512 B</td><td>DRAM (ISR-accessible)</td></tr>
+  <tr><td>S-curve phase state</td><td>~64 B</td><td>DRAM (ISR-accessible)</td></tr>
+  <tr><td>Corner smooth buffer (6 floats + flags)</td><td>~32 B</td><td>Static (BSS)</td></tr>
+  <tr><td><strong>Total G-code allocation</strong></td><td><strong>~13 KB</strong></td><td></td></tr>
+  <tr><td colspan="3" style="color: var(--fg2);"><em>Total firmware RAM: 48 KB / 320 KB (14.7%)</em></td></tr>
+</table>
+
+<p style="margin-top: 40px; color: var(--fg2); font-size: 0.8em; border-top: 1px solid var(--border); padding-top: 10px;">
+  WiFi CNC Controller &mdash; Engineering Reference &mdash; Generated February 2026
+</p>
+
+</main>
+</body>
+</html>

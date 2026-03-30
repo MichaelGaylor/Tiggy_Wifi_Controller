@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WiFi CNC Controller - Install
+Comment=Install and configure the WiFi CNC Controller for LinuxCNC
+Exec=bash -c 'cd "$(dirname "%k")" && ./install.sh'
+Icon=utilities-terminal
+Terminal=true
+Categories=Utility;

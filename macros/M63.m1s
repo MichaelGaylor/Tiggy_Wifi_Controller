@@ -1,0 +1,12 @@
+' M63 Pn - Synchronized digital output OFF (motion-synced)
+' P0 = Output #1 (EXTACT1), P1 = Output #2 (EXTACT2), etc.
+' Signal indices: EXTACT1=7, EXTACT2=8, ... EXTACT6=12
+
+Dim p
+p = Param1()
+If p >= 0 And p <= 5 Then
+    While IsMoving()
+        Sleep 10
+    Wend
+    DeActivateSignal(7 + p)
+End If

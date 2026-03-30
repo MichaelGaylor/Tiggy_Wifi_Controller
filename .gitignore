@@ -1,0 +1,35 @@
+# Build artifacts
+firmware/.pio/
+plugin/WiFiCNC/obj/
+plugin/WiFiCNC/bin/
+tools/__pycache__/
+*.map
+
+# Reverse-engineering / analysis files (large, not product code)
+full_disasm.txt
+functions_disasm.txt
+subfuncs_disasm.txt
+*.ps1
+analyze_*.py
+analyze_*.txt
+
+# Debug logs
+debug_*.log
+debug_*.txt
+
+# Dev utilities
+check_sizes.cpp
+run_check.bat
+
+# Claude Code session state
+.claude/
+
+# IDE / editor
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
