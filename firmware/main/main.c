@@ -37,10 +37,10 @@ static const char *TAG = "main";
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Tiggy Motion Controller v%d.%d.%d starting...",
-             (WCNC_FIRMWARE_VERSION >> 24) & 0xFF,
-             (WCNC_FIRMWARE_VERSION >> 16) & 0xFF,
-             WCNC_FIRMWARE_VERSION & 0xFFFF);
+    ESP_LOGI(TAG, "Tiggy Motion Controller v%u.%u.%u starting...",
+             (unsigned)((WCNC_FIRMWARE_VERSION >> 24) & 0xFF),
+             (unsigned)((WCNC_FIRMWARE_VERSION >> 16) & 0xFF),
+             (unsigned)(WCNC_FIRMWARE_VERSION & 0xFFFF));
 
     /* 1. Initialize NVS (persistent configuration) */
     esp_err_t ret = nvs_flash_init();

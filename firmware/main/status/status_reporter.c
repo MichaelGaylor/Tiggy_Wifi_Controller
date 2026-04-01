@@ -51,7 +51,11 @@ void status_report_task(void *pvParameters)
         memset(&pkt, 0, sizeof(pkt));
 
         /* Position */
-        stepper_get_position(pkt.report.position_steps);
+        {
+            int32_t pos_tmp[WCNC_MAX_AXES];
+            stepper_get_position(pos_tmp);
+            memcpy(pkt.report.position_steps, pos_tmp, sizeof(pos_tmp));
+        }
 
         /* Buffer state */
         pkt.report.buffer_available = planner_available();
