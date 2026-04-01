@@ -793,9 +793,9 @@ static INT_PTR CALLBACK AdvancedProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
                     ds->editCfg.invertStep |= (1 << i);
                 if (IsDlgButtonChecked(hDlg, IDC_INV_DIR_BASE + i) == BST_CHECKED)
                     ds->editCfg.invertDir |= (1 << i);
+            }
 #else
             /* Inversion read from Mach3 Ports & Pins in ReadInversionFromMach3() */
-            for (int i = 0; i < 6; i++) { (void)i; }
 #endif
 
             /* Homing */

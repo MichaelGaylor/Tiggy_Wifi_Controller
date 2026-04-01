@@ -8,7 +8,7 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 
 - Up to 6 axes (X, Y, Z, A, B, C) with independent step/direction control
 - Axis configuration (steps/unit, velocity, accel) in the plugin dialog
-- Signal inversion configured via Mach3's **Config > Ports and Pins** dialog
+- Signal inversion configured in the plugin's own settings dialog
 - Real-time position feedback and DRO display
 - Limit switches, home switches, E-stop, and probe inputs
 - Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs
@@ -110,20 +110,18 @@ Displays real-time state of all input signals, updated every 200ms while the tab
 | E-Stop | `status.estop_input` |
 | Probe | `status.probe_state` |
 
-**Signal inversion** is configured in **Mach3's Config > Ports and Pins** dialog, not in the plugin dialog. The plugin pre-populates input signals on Port 1 so they appear in Ports and Pins. To invert a signal, tick its **Active Low** checkbox in Mach3's Input Signals or Output Signals page.
+Each input signal has an **Inv** (invert) checkbox. E-Stop and Probe also have inversion checkboxes.
 
-| Signal | Port | Pins | Inversion |
-|--------|------|------|-----------|
-| X-C Limit+/- | 1 | 1-12 | Mach3 Ports & Pins (Negated) |
-| X-C Home | 1 | 13-18 | Mach3 Ports & Pins (Negated) |
-| Activation 1-4 | 1 | 19-22 | Mach3 Ports & Pins (Negated) |
-| Probe | 1 | 23 | Mach3 Ports & Pins (Negated) |
-| E-Stop | 1 | 24 | Mach3 Ports & Pins (Negated) |
-| Index (spindle) | 1 | 25 | Mach3 Ports & Pins (Negated) |
+**Inversion behaviour:**
 
-Step/Dir inversion is set in Mach3's **Config > Ports and Pins > Motor Outputs** (StepNegate / DirNegate columns).
+| Signal | Raw Source | Inversion Applied By |
+|--------|-----------|---------------------|
+| Limit switches | Firmware debounce callback | Plugin sends inversion bitmask to firmware |
+| Home switches | Firmware homing cycle | Plugin sends inversion bitmask to firmware |
+| E-Stop | Firmware sends raw GPIO state | Plugin applies inversion |
+| Probe | Firmware sends raw GPIO state | Plugin applies inversion |
 
-**Tip:** If a signal shows ON with nothing connected, enable it and tick Active Low in Mach3 Ports & Pins.
+**Tip:** If a signal shows ON with nothing connected, tick its Inv checkbox.
 
 #### Misc Input Functions (button press -> action)
 
@@ -161,7 +159,7 @@ Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each
 
 #### Step/Dir Inversion
 
-Step and direction inversion is now configured in Mach3's **Config > Ports and Pins > Motor Outputs** dialog. The plugin reads these settings automatically.
+Per-axis checkboxes to invert the step and direction signals. Use these if your stepper drivers expect opposite polarity.
 
 #### Homing
 
@@ -608,11 +606,13 @@ The plugin writes axis configuration (steps/unit, velocity, acceleration) into M
 
 ### E-stop triggers with nothing connected
 
-The E-stop GPIO pin may be floating high. Go to **Config > Ports and Pins > Input Signals**, find the E-Stop signal (Port 1, Pin 24), enable it and tick **Active Low**. This inverts the interpretation so an open (unconnected) pin reads as "not triggered".
+The E-stop GPIO pin may be floating high. Tick the **Inv** checkbox next to E-Stop in the Inputs tab. This inverts the interpretation so an open (unconnected) pin reads as "not triggered".
 
 ### Homing completes instantly without touching switches
 
-The firmware thinks the home switches are already triggered. Go to **Config > Ports and Pins > Input Signals** and tick **Active Low** for the home switch signals (Port 1, Pins 3/6/9/12/15/18 for X-C Home). The plugin reads the Negated flag and sends the inversion to the firmware.
+The firmware thinks the home switches are already triggered. Check the Inputs tab:
+- If home switches show **ON** with nothing connected, tick the corresponding **Home switch inversion** checkboxes
+- The firmware applies home inversion internally, so these checkboxes directly affect the firmware's interpretation during homing
 
 ### Homing only moves one axis
 
@@ -630,7 +630,7 @@ The firmware homes axes sequentially (typically Z first for safety). If axes app
 
 The plugin enables limit switch signals for all enabled axes. If limits don't trigger:
 1. Check the Inputs tab live display - does the switch show ON when physically pressed?
-2. If it shows the wrong state, go to Mach3 **Config > Ports and Pins > Input Signals** and tick **Active Low** for that limit signal
+2. If it shows the wrong state, tick the Inv checkbox for that axis
 3. Verify the limit GPIO is correctly wired to the pin shown in the Pin Map tab
 
 ### Input function buttons don't trigger

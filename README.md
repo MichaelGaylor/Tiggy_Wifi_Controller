@@ -72,16 +72,11 @@ pio run -e esp32s3-zero -t upload   # Upload to S3-Zero board
 
 ## Configuration
 
-### Mach3 Signal Setup
+### Mach3 Configuration
 
-The plugin pre-populates signals in Mach3's **Config > Ports and Pins** dialog (Port 1). Configure signal inversion (Active Low) and enable/disable signals there -- no need to duplicate settings in the plugin dialog.
+All settings are in the plugin's own dialog -- you do **not** need to configure Mach3's Motor Tuning or Ports and Pins.
 
-| Mach3 Dialog | What to Configure |
-|---|---|
-| Config > Ports and Pins > Input Signals | Enable limits, home, E-stop, probe; set Active Low |
-| Config > Ports and Pins > Output Signals | Enable outputs; set Active Low |
-| Config > Ports and Pins > Motor Outputs | Step/Dir pin inversion |
-| Config > Tiggy Motion Controller... | IP address, axis config, timing, homing, spindle, I/O module |
+Open the settings via **Config > Tiggy Motion Controller...** in the Mach3 menu.
 
 ### Plugin Settings Dialog
 

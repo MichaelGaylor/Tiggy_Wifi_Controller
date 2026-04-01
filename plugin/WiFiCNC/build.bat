@@ -7,7 +7,7 @@ set SDK_LIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0
 set P=C:\Users\TIGGY_AI\Documents\Mach3_Controller\plugin\WiFiCNC
 set R=C:\Users\TIGGY_AI\Documents\Mach3_Controller\protocol
 
-set OPTS=/nologo /c /EHsc /W3 /O2 /DWIN32 /D_WINDOWS /D_USRDLL /DWIFICNC_EXPORTS /MD
+set OPTS=/nologo /c /EHsc /W3 /O2 /DWIN32 /D_WINDOWS /D_USRDLL /DWIFICNC_EXPORTS /DLEGACY_INVERSION /MD
 set INC=/I"%P%" /I"%P%\MachIncludes" /I"%R%" /I"%MSVC%\include" /I"%SDK_INC%\ucrt" /I"%SDK_INC%\um" /I"%SDK_INC%\shared"
 
 if not exist "%P%\obj" mkdir "%P%\obj"
