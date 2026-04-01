@@ -36,7 +36,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install platformio==6.1.19
 
       - name: Build firmware
         run: cd firmware && pio run -e ${{ matrix.board }}
