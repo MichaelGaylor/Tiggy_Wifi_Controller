@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-firmware:
-    name: Build ESP32 Firmware
+    name: Build Firmware (${{ matrix.board }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,55 +36,6 @@ jobs:
             firmware/.pio/build/${{ matrix.board }}/bootloader.bin
             firmware/.pio/build/${{ matrix.board }}/partitions.bin
 
-  build-windows:
-    name: Build Tiggy.dll (Windows x86)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
-
-      - name: Compile plugin
-        shell: cmd
-        run: |
-          set P=%CD%\plugin\WiFiCNC
-          set R=%CD%\protocol
-          set OPTS=/nologo /c /EHsc /W3 /O2 /DWIN32 /D_WINDOWS /D_USRDLL /DWIFICNC_EXPORTS /DLEGACY_INVERSION /MD
-          set INC=/I"%P%" /I"%P%\MachIncludes" /I"%R%"
-
-          if not exist "%P%\obj" mkdir "%P%\obj"
-          if not exist "%P%\bin" mkdir "%P%\bin"
-
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\Plugin.obj" "%P%\Plugin.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\NetworkClient.obj" "%P%\NetworkClient.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\SegmentBuilder.obj" "%P%\SegmentBuilder.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\BufferManager.obj" "%P%\BufferManager.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\MachDevice.obj" "%P%\MachDevice.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\PluginConfig.obj" "%P%\PluginConfig.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\ConfigDialog.obj" "%P%\ConfigDialog.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\PinMap.obj" "%P%\PinMap.cpp"
-          cl.exe %OPTS% %INC% /Fo"%P%\obj\License.obj" "%P%\License.cpp"
-
-          link.exe /nologo /DLL /OUT:"%P%\bin\Tiggy.dll" ^
-            "%P%\obj\Plugin.obj" "%P%\obj\NetworkClient.obj" ^
-            "%P%\obj\SegmentBuilder.obj" "%P%\obj\BufferManager.obj" ^
-            "%P%\obj\MachDevice.obj" "%P%\obj\PluginConfig.obj" ^
-            "%P%\obj\ConfigDialog.obj" "%P%\obj\PinMap.obj" ^
-            "%P%\obj\License.obj" ^
-            ws2_32.lib kernel32.lib user32.lib advapi32.lib comctl32.lib gdi32.lib crypt32.lib
-
-      - name: Upload Tiggy.dll
-        uses: actions/upload-artifact@v4
-        with:
-          name: Tiggy-Windows
-          path: |
-            plugin/WiFiCNC/bin/Tiggy.dll
-            plugin/WiFiCNC/boards/*.pinmap
-            macros/*.m1s
-
   build-linux:
     name: Package LinuxCNC installer
     runs-on: ubuntu-22.04
@@ -110,7 +61,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-firmware, build-windows, build-linux]
+    needs: [build-firmware, build-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -123,9 +74,6 @@ jobs:
 
       - name: Package releases
         run: |
-          # Windows plugin
-          cd Tiggy-Windows && zip -r ../Tiggy-Windows-Mach3.zip . && cd ..
-
           # LinuxCNC installer
           cd Tiggy-LinuxCNC && tar czf ../Tiggy-LinuxCNC.tar.gz . && cd ..
 
@@ -148,23 +96,20 @@ jobs:
           body: |
             Automated build from commit ${{ github.sha }}
 
-            ## Downloads
-
-            ### Mach3 Plugin (Windows)
-            - **Tiggy-Windows-Mach3.zip** - Plugin DLL + pin maps + M-code macros
-
-            ### LinuxCNC (Linux)
-            - **Tiggy-LinuxCNC.tar.gz** - HAL component source + interactive installer
-
-            ### ESP32 Firmware (flash via USB or web flasher)
+            ## ESP32 Firmware (flash via USB)
             - **firmware-esp32s3-devkitc.zip** - 6-axis DevKitC-1 N16R8
             - **firmware-esp32s3-zero.zip** - 3-axis Waveshare S3-Zero
             - **firmware-esp32-wroom32.zip** - Classic ESP32 WROOM-32
 
+            ## LinuxCNC
+            - **Tiggy-LinuxCNC.tar.gz** - HAL component source + interactive installer
+
+            ## Mach3 Plugin
+            Download from [Tiggy Pro releases](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller_Pro/releases/latest)
+
             ## Installation
-            See the [README](https://github.com/${{ github.repository }}#installation) for instructions.
+            See the [README](https://github.com/${{ github.repository }}#quick-start) for instructions.
           files: |
-            Tiggy-Windows-Mach3.zip
             Tiggy-LinuxCNC.tar.gz
             firmware-esp32s3-devkitc.zip
             firmware-esp32s3-zero.zip
