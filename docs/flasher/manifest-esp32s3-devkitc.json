@@ -1,0 +1,15 @@
+{
+  "name": "Tiggy Pro (ESP32-S3-DevKitC)",
+  "version": "1.0.0",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-devkitc/bootloader.bin", "offset": 0 },
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-devkitc/partitions.bin", "offset": 32768 },
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-devkitc/firmware.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

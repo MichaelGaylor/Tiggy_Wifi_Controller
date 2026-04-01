@@ -8,9 +8,9 @@ Replaces parallel port drivers with a WiFi or Ethernet-connected motion controll
 
 | Component | Download | Description |
 |-----------|----------|-------------|
-| **ESP32 Firmware** | [DevKitC](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-devkitc.zip) / [S3-Zero](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-zero.zip) / [WROOM-32](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32-wroom32.zip) | Pre-built firmware binaries |
+| **ESP32 Firmware** | [Flash from browser](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/) | One-click web flasher (Chrome/Edge) |
 | **LinuxCNC** | [Tiggy-LinuxCNC.tar.gz](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz) | HAL component + interactive installer |
-| **Mach3 Plugin** | [Tiggy-Mach3-Plugin.zip](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller_Pro/releases/latest/download/Tiggy-Mach3-Plugin.zip) | Windows plugin (free: 3-axis, Pro: 6-axis) |
+| **Mach3 Plugin** | [www.tiggyengineering.com](https://www.tiggyengineering.com) | Windows plugin (free: 3-axis, Pro: 6-axis) |
 
 Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 
@@ -40,20 +40,14 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 
 ### Flash Firmware
 
-Download the firmware zip for your board from [Releases](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest), then flash via USB:
+**Easiest:** Open the [Web Flasher](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/) in Chrome or Edge, plug in your ESP32 via USB, select your board, and click Flash. No software install needed.
 
-```bash
-# Using esptool.py (included with PlatformIO)
-esptool.py --chip esp32s3 --port COM3 write_flash 0x0 firmware.bin
-```
-
-Or build from source with [PlatformIO](https://platformio.org/):
+**From source** (requires [PlatformIO](https://platformio.org/)):
 
 ```bash
 cd firmware
 pio run -e esp32s3-devkitc -t upload    # 6-axis DevKitC
 pio run -e esp32s3-zero -t upload       # 3-axis S3-Zero
-pio run -e esp32-wroom32 -t upload      # Classic ESP32
 ```
 
 ### LinuxCNC
@@ -71,7 +65,7 @@ Or double-click `install.desktop` from your file manager.
 
 ### Mach3 (Windows)
 
-Download the [Mach3 Plugin](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller_Pro/releases/latest/download/Tiggy-Mach3-Plugin.zip), then:
+Download the Mach3 plugin from [www.tiggyengineering.com](https://www.tiggyengineering.com), then:
 
 1. Extract `Tiggy.dll` and `*.pinmap` to `C:\Mach3\PlugIns\`
 2. Extract `M62-M65.m1s` to `C:\Mach3\macros\Mach3Mill\`

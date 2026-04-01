@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiggy CNC Controller - Flash Firmware</title>
+    <script
+      type="module"
+      src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+    ></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            background: #16213e;
+            width: 100%;
+            padding: 24px;
+            text-align: center;
+            border-bottom: 2px solid #0f3460;
+        }
+        .header h1 { color: #e94560; font-size: 28px; margin-bottom: 8px; }
+        .header p { color: #a0a0a0; font-size: 14px; }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            padding: 32px 24px;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid #0f3460;
+        }
+        .card h2 { color: #e94560; font-size: 20px; margin-bottom: 16px; }
+        .card h3 { color: #53a8b6; font-size: 16px; margin: 16px 0 8px; }
+        .board-select {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .board-option {
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .board-option:hover { border-color: #e94560; }
+        .board-option.selected { border-color: #e94560; background: #1e1e3a; }
+        .board-option h3 { color: #fff; margin: 0 0 4px; font-size: 16px; }
+        .board-option p { color: #a0a0a0; font-size: 13px; margin: 0; }
+        .board-option .axes { color: #53a8b6; font-weight: bold; }
+        .flash-area {
+            text-align: center;
+            padding: 24px 0;
+        }
+        esp-web-install-button {
+            --esp-tools-button-color: #e94560;
+            --esp-tools-button-text-color: #fff;
+        }
+        .steps { list-style: none; padding: 0; }
+        .steps li {
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+            color: #c0c0c0;
+            font-size: 14px;
+        }
+        .steps li::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            color: #e94560;
+            font-weight: bold;
+        }
+        a { color: #53a8b6; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .footer {
+            margin-top: auto;
+            padding: 24px;
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+        }
+        .warning {
+            background: #2d1b00;
+            border: 1px solid #e94560;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #ffb347;
+        }
+        #no-webserial {
+            display: none;
+            background: #3d1b1b;
+            border: 1px solid #e94560;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Tiggy CNC Controller</h1>
+        <p>Flash firmware directly from your browser &mdash; no software install needed</p>
+    </div>
+
+    <div class="container">
+        <div id="no-webserial">
+            <h3>Browser Not Supported</h3>
+            <p>Web Serial requires <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> (version 89+).</p>
+            <p>Safari and Firefox are not supported.</p>
+        </div>
+
+        <div class="card">
+            <h2>1. Select Your Board</h2>
+            <div class="board-select">
+                <div class="board-option selected" onclick="selectBoard(this, 'esp32s3-devkitc')" id="board-devkitc">
+                    <h3>Tiggy Pro &mdash; ESP32-S3-DevKitC-1</h3>
+                    <p><span class="axes">6-axis</span> (X/Y/Z/A/B/C) &bull; 16MB Flash &bull; 8MB PSRAM &bull; Full I/O</p>
+                </div>
+                <div class="board-option" onclick="selectBoard(this, 'esp32s3-zero')" id="board-zero">
+                    <h3>Tiggy Standard &mdash; ESP32-S3-Zero</h3>
+                    <p><span class="axes">3-axis</span> (X/Y/Z) &bull; 4MB Flash &bull; Compact form factor</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>2. Connect &amp; Flash</h2>
+            <ol class="steps">
+                <li data-step="1.">Connect your ESP32 board via USB</li>
+                <li data-step="2.">Click the Flash button below</li>
+                <li data-step="3.">Select the serial port in the browser popup</li>
+                <li data-step="4.">Wait for flashing to complete (~60 seconds)</li>
+            </ol>
+
+            <div class="flash-area">
+                <esp-web-install-button id="flash-btn"
+                    manifest="manifest-esp32s3-devkitc.json">
+                    <button slot="activate" style="
+                        background: #e94560;
+                        color: white;
+                        border: none;
+                        padding: 14px 36px;
+                        font-size: 18px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">Flash Firmware</button>
+                </esp-web-install-button>
+            </div>
+
+            <div class="warning">
+                <strong>Note:</strong> Flashing will erase the current firmware on your board.
+                WiFi settings stored in NVS are preserved.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>3. Next Steps</h2>
+            <h3>Connect to your controller</h3>
+            <p>After flashing, the ESP32 creates a WiFi access point named <strong>TiggyCNC</strong>.
+               Connect to it and use IP <strong>192.168.4.1</strong>.</p>
+
+            <h3>Mach3 Plugin (Windows)</h3>
+            <p>Download the Mach3 plugin from <a href="https://www.tiggyengineering.com">www.tiggyengineering.com</a></p>
+
+            <h3>LinuxCNC (Linux)</h3>
+            <p>Download the <a href="https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz">LinuxCNC installer</a>
+               and run <code>./install.sh</code></p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>&copy; 2026 <a href="https://www.tiggyengineering.com">Tiggy Engineering</a> &bull;
+           <a href="https://github.com/MichaelGaylor/Tiggy_Wifi_Controller">GitHub</a></p>
+    </div>
+
+    <script>
+        // Check WebSerial support
+        if (!('serial' in navigator)) {
+            document.getElementById('no-webserial').style.display = 'block';
+        }
+
+        function selectBoard(el, board) {
+            document.querySelectorAll('.board-option').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('flash-btn').setAttribute('manifest', 'manifest-' + board + '.json');
+        }
+    </script>
+</body>
+</html>
