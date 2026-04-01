@@ -84,6 +84,10 @@ struct PluginConfig {
      * 0 = none, 1 = Spindle CW, 2 = Spindle CCW, 3 = Flood,
      * 4 = Mist, 5 = Output 1, 6 = Output 2, 7 = Output 3, 8 = Output 4 */
     uint16_t ioOutputFunction[16];
+
+    /* License */
+    char licenseEmail[128];
+    char licenseKey[128];
 };
 
 /* Fill config with sensible hobby CNC defaults */

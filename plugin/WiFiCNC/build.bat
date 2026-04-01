@@ -19,41 +19,45 @@ echo   Tiggy Motion Controller Build (Win32/x86)
 echo ========================================
 echo.
 
-echo [1/8] Plugin.cpp
+echo [1/9] Plugin.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\Plugin.obj" "%P%\Plugin.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [2/8] NetworkClient.cpp
+echo [2/9] NetworkClient.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\NetworkClient.obj" "%P%\NetworkClient.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [3/8] SegmentBuilder.cpp
+echo [3/9] SegmentBuilder.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\SegmentBuilder.obj" "%P%\SegmentBuilder.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [4/8] BufferManager.cpp
+echo [4/9] BufferManager.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\BufferManager.obj" "%P%\BufferManager.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [5/8] MachDevice.cpp
+echo [5/9] MachDevice.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\MachDevice.obj" "%P%\MachDevice.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [6/8] PluginConfig.cpp
+echo [6/9] PluginConfig.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\PluginConfig.obj" "%P%\PluginConfig.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [7/8] ConfigDialog.cpp
+echo [7/9] ConfigDialog.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\ConfigDialog.obj" "%P%\ConfigDialog.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
-echo [8/8] PinMap.cpp
+echo [8/9] PinMap.cpp
 "%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\PinMap.obj" "%P%\PinMap.cpp"
+if %ERRORLEVEL% NEQ 0 goto fail
+
+echo [9/9] License.cpp
+"%MSVC%\bin\Hostx64\x86\cl.exe" %OPTS% %INC% /Fo"%P%\obj\License.obj" "%P%\License.cpp"
 if %ERRORLEVEL% NEQ 0 goto fail
 
 echo.
 echo === Linking Tiggy.dll ===
-"%MSVC%\bin\Hostx64\x86\link.exe" /nologo /DLL /OUT:"%P%\bin\Tiggy.dll" /LIBPATH:"%MSVC%\lib\x86" /LIBPATH:"%SDK_LIB%\ucrt\x86" /LIBPATH:"%SDK_LIB%\um\x86" ws2_32.lib kernel32.lib user32.lib advapi32.lib comctl32.lib gdi32.lib "%P%\obj\Plugin.obj" "%P%\obj\NetworkClient.obj" "%P%\obj\SegmentBuilder.obj" "%P%\obj\BufferManager.obj" "%P%\obj\MachDevice.obj" "%P%\obj\PluginConfig.obj" "%P%\obj\ConfigDialog.obj" "%P%\obj\PinMap.obj"
+"%MSVC%\bin\Hostx64\x86\link.exe" /nologo /DLL /OUT:"%P%\bin\Tiggy.dll" /LIBPATH:"%MSVC%\lib\x86" /LIBPATH:"%SDK_LIB%\ucrt\x86" /LIBPATH:"%SDK_LIB%\um\x86" ws2_32.lib kernel32.lib user32.lib advapi32.lib comctl32.lib gdi32.lib crypt32.lib "%P%\obj\Plugin.obj" "%P%\obj\NetworkClient.obj" "%P%\obj\SegmentBuilder.obj" "%P%\obj\BufferManager.obj" "%P%\obj\MachDevice.obj" "%P%\obj\PluginConfig.obj" "%P%\obj\ConfigDialog.obj" "%P%\obj\PinMap.obj" "%P%\obj\License.obj"
 if %ERRORLEVEL% NEQ 0 goto fail
 
 echo.

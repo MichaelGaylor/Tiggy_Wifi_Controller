@@ -69,6 +69,10 @@ void PluginConfig_LoadDefaults(PluginConfig *cfg)
     cfg->ioJogSpeed = 5000;    /* 5000 steps/sec default pendant jog */
     for (int i = 0; i < 16; i++)
         cfg->ioOutputFunction[i] = 0;
+
+    /* License */
+    cfg->licenseEmail[0] = '\0';
+    cfg->licenseKey[0] = '\0';
 }
 
 /* ===================================================================
@@ -209,6 +213,10 @@ bool PluginConfig_LoadFromRegistry(PluginConfig *cfg)
         if (RegReadDWORD(hKey, key, &dw)) cfg->ioOutputFunction[i] = (uint16_t)dw;
     }
 
+    /* License */
+    RegReadString(hKey, "LicenseEmail", cfg->licenseEmail, sizeof(cfg->licenseEmail));
+    RegReadString(hKey, "LicenseKey", cfg->licenseKey, sizeof(cfg->licenseKey));
+
     RegCloseKey(hKey);
     return true;
 }
@@ -302,6 +310,10 @@ void PluginConfig_SaveToRegistry(const PluginConfig *cfg)
         snprintf(key, sizeof(key), "IOOutputFunc%d", i);
         RegWriteDWORD(hKey, key, cfg->ioOutputFunction[i]);
     }
+
+    /* License */
+    RegWriteString(hKey, "LicenseEmail", cfg->licenseEmail);
+    RegWriteString(hKey, "LicenseKey", cfg->licenseKey);
 
     RegCloseKey(hKey);
 }

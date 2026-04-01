@@ -20,6 +20,7 @@
 #include "BufferManager.h"
 #include "PluginConfig.h"
 #include "ConfigDialog.h"
+#include "License.h"
 #include "../../protocol/wifi_cnc_protocol.h"
 
 #include <cstdio>
@@ -378,6 +379,7 @@ static NetworkClient  *g_network    = nullptr;
 static SegmentBuilder *g_segBuilder = nullptr;
 static BufferManager  *g_bufferMgr  = nullptr;
 static bool            g_connected  = false;
+static bool            g_proLicense = false;
 static bool            g_enabled    = false;
 static int             g_lastTrajIndex = 0;
 
@@ -849,6 +851,21 @@ void piPostInitControlImpl()
         return;
     }
 
+    /* License check */
+    g_proLicense = License_CheckKey(g_pluginConfig.licenseEmail,
+                                     g_pluginConfig.licenseKey);
+    Log("License: %s (%s)", License_TierName(g_proLicense),
+        g_proLicense ? g_pluginConfig.licenseEmail : "no key");
+
+    if (!g_proLicense) {
+        /* Free tier: disable axes 4-6 (A/B/C) */
+        for (int i = 3; i < WCNC_NUM_AXES; i++) {
+            g_pluginConfig.axis[i].enabled = false;
+        }
+        /* Disable I/O expansion module */
+        g_pluginConfig.ioModuleEnabled = false;
+    }
+
     /* Log m_PrinterOn scan results */
     Log("MachView->Planner offset = 0x%X (%d bytes)",
         (unsigned)g_plannerOffset, (int)g_plannerOffset);
@@ -933,6 +950,24 @@ void piPostInitControlImpl()
                 }
 
                 if (hConfigMenu) {
+                    /* Grey out Mach3 config menus that conflict with our plugin.
+                     * These settings are all handled by our dialog — letting users
+                     * change them in Mach3 would cause confusion or be ignored. */
+                    int configItemCount = GetMenuItemCount(hConfigMenu);
+                    for (int ci = 0; ci < configItemCount; ci++) {
+                        char itemText[128] = {0};
+                        GetMenuStringA(hConfigMenu, ci, itemText, sizeof(itemText), MF_BYPOSITION);
+                        if (strstr(itemText, "Motor Tuning") ||
+                            strstr(itemText, "Ports and Pins") ||
+                            strstr(itemText, "Ports & Pins")) {
+                            UINT itemId = GetMenuItemID(hConfigMenu, ci);
+                            if (itemId != (UINT)-1) {
+                                EnableMenuItem(hConfigMenu, itemId, MF_BYCOMMAND | MF_GRAYED);
+                                Log("  Greyed out Config menu: '%s' (id=%u)", itemText, itemId);
+                            }
+                        }
+                    }
+
                     AppendMenuA(hConfigMenu, MF_SEPARATOR, 0, nullptr);
                     AppendMenuA(hConfigMenu, MF_STRING, IDM_WIFICNC_SETTINGS,
                                 "Tiggy Motion Controller...");

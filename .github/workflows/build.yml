@@ -7,6 +7,35 @@ on:
     branches: [main]
 
 jobs:
+  build-firmware:
+    name: Build ESP32 Firmware
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        board: [esp32s3-devkitc, esp32s3-zero, esp32-wroom32]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: cd firmware && pio run -e ${{ matrix.board }}
+
+      - name: Upload firmware binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: |
+            firmware/.pio/build/${{ matrix.board }}/firmware.bin
+            firmware/.pio/build/${{ matrix.board }}/bootloader.bin
+            firmware/.pio/build/${{ matrix.board }}/partitions.bin
+
   build-windows:
     name: Build Tiggy.dll (Windows x86)
     runs-on: windows-latest
@@ -23,7 +52,7 @@ jobs:
         run: |
           set P=%CD%\plugin\WiFiCNC
           set R=%CD%\protocol
-          set OPTS=/nologo /c /EHsc /W3 /O2 /DWIN32 /D_WINDOWS /D_USRDLL /DWIFICNC_EXPORTS /MD
+          set OPTS=/nologo /c /EHsc /W3 /O2 /DWIN32 /D_WINDOWS /D_USRDLL /DWIFICNC_EXPORTS /DLEGACY_INVERSION /MD
           set INC=/I"%P%" /I"%P%\MachIncludes" /I"%R%"
 
           if not exist "%P%\obj" mkdir "%P%\obj"
@@ -37,13 +66,15 @@ jobs:
           cl.exe %OPTS% %INC% /Fo"%P%\obj\PluginConfig.obj" "%P%\PluginConfig.cpp"
           cl.exe %OPTS% %INC% /Fo"%P%\obj\ConfigDialog.obj" "%P%\ConfigDialog.cpp"
           cl.exe %OPTS% %INC% /Fo"%P%\obj\PinMap.obj" "%P%\PinMap.cpp"
+          cl.exe %OPTS% %INC% /Fo"%P%\obj\License.obj" "%P%\License.cpp"
 
           link.exe /nologo /DLL /OUT:"%P%\bin\Tiggy.dll" ^
             "%P%\obj\Plugin.obj" "%P%\obj\NetworkClient.obj" ^
             "%P%\obj\SegmentBuilder.obj" "%P%\obj\BufferManager.obj" ^
             "%P%\obj\MachDevice.obj" "%P%\obj\PluginConfig.obj" ^
             "%P%\obj\ConfigDialog.obj" "%P%\obj\PinMap.obj" ^
-            ws2_32.lib kernel32.lib user32.lib advapi32.lib comctl32.lib gdi32.lib
+            "%P%\obj\License.obj" ^
+            ws2_32.lib kernel32.lib user32.lib advapi32.lib comctl32.lib gdi32.lib crypt32.lib
 
       - name: Upload Tiggy.dll
         uses: actions/upload-artifact@v4
@@ -55,28 +86,10 @@ jobs:
             macros/*.m1s
 
   build-linux:
-    name: Build LinuxCNC HAL component
+    name: Package LinuxCNC installer
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install LinuxCNC build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential gcc
-
-      - name: Compile wifi_cnc HAL component (standalone)
-        run: |
-          cd linuxcnc
-          # Build as a standalone shared library (halcompile not available in CI)
-          # This verifies the code compiles without errors
-          gcc -shared -fPIC -o wifi_cnc.so wifi_cnc.c \
-            -I../protocol \
-            -DULAPI -DRTAPI \
-            -DHAL_COMPILE_STANDALONE \
-            -lm -lpthread -lrt \
-            -Wno-implicit-function-declaration \
-            2>&1 || echo "Note: Full HAL build requires LinuxCNC installed"
 
       - name: Package LinuxCNC files
         run: |
@@ -97,7 +110,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-windows, build-linux]
+    needs: [build-firmware, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -105,27 +118,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Windows artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
-        with:
-          name: Tiggy-Windows
-          path: release-windows/
 
-      - name: Download LinuxCNC artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: Tiggy-LinuxCNC
-          path: release-linux/
-
-      - name: Package Windows release
+      - name: Package releases
         run: |
-          cd release-windows
-          zip -r ../Tiggy-Windows-Mach3.zip .
+          # Windows plugin
+          cd Tiggy-Windows && zip -r ../Tiggy-Windows-Mach3.zip . && cd ..
 
-      - name: Package Linux release
-        run: |
-          cd release-linux
-          tar czf ../Tiggy-LinuxCNC.tar.gz .
+          # LinuxCNC installer
+          cd Tiggy-LinuxCNC && tar czf ../Tiggy-LinuxCNC.tar.gz . && cd ..
+
+          # Firmware binaries (one zip per board)
+          for board in esp32s3-devkitc esp32s3-zero esp32-wroom32; do
+            if [ -d "firmware-$board" ]; then
+              cd "firmware-$board" && zip -r "../firmware-$board.zip" . && cd ..
+            fi
+          done
 
       - name: Get short SHA
         id: sha
@@ -140,13 +149,25 @@ jobs:
             Automated build from commit ${{ github.sha }}
 
             ## Downloads
-            - **Tiggy-Windows-Mach3.zip** - Mach3 plugin (Tiggy.dll + pin maps + macros)
-            - **Tiggy-LinuxCNC.tar.gz** - LinuxCNC HAL component + installer
+
+            ### Mach3 Plugin (Windows)
+            - **Tiggy-Windows-Mach3.zip** - Plugin DLL + pin maps + M-code macros
+
+            ### LinuxCNC (Linux)
+            - **Tiggy-LinuxCNC.tar.gz** - HAL component source + interactive installer
+
+            ### ESP32 Firmware (flash via USB or web flasher)
+            - **firmware-esp32s3-devkitc.zip** - 6-axis DevKitC-1 N16R8
+            - **firmware-esp32s3-zero.zip** - 3-axis Waveshare S3-Zero
+            - **firmware-esp32-wroom32.zip** - Classic ESP32 WROOM-32
 
             ## Installation
             See the [README](https://github.com/${{ github.repository }}#installation) for instructions.
           files: |
             Tiggy-Windows-Mach3.zip
             Tiggy-LinuxCNC.tar.gz
+            firmware-esp32s3-devkitc.zip
+            firmware-esp32s3-zero.zip
+            firmware-esp32-wroom32.zip
           prerelease: false
           make_latest: true
