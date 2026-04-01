@@ -1,5 +1,7 @@
 # Build artifacts
 firmware/.pio/
+firmware/sdkconfig
+firmware/sdkconfig.old
 plugin/WiFiCNC/obj/
 plugin/WiFiCNC/bin/
 tools/__pycache__/
