@@ -148,7 +148,7 @@ Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each
 - Input 3 = E-Stop (wire a red mushroom button to Misc In 3)
 - Input 4 = Reset (wire a momentary "Reset" button to Misc In 4)
 
-**Note:** The Tiggy Standard board has no misc input GPIOs assigned (all show `n/a` in Pin Map). The Tiggy Pro board has 4 misc inputs on GPIO 18, 21, 47, and 33.
+**Note:** The Tiggy Standard board has no misc input GPIOs assigned (all show `n/a` in Pin Map). The Tiggy Pro board has 3 misc inputs on GPIO 18, 21, and 32. (GPIO 47 was reassigned to the W5500 Ethernet interrupt pin.)
 
 
 ### Tab 4: Advanced
@@ -235,9 +235,24 @@ Eight output channels (Out 0 - Out 7) can each mirror a Mach3 signal:
 | Mist | 4 | Mirrors mist coolant state |
 | Output 1-4 | 5-8 | Mirrors misc output states |
 
-**How the I/O module works:** The I/O expansion module is a separate controller board with `device_mode` set to 1 (I/O module) in its firmware NVS configuration. It connects via its own TCP/UDP channels and reports input states. The plugin sends output states to it based on the configured function mapping. The module does not run stepper/planner code -- it only handles digital I/O.
+**How to set up an I/O module (firmware side):**
 
-**Detection:** The plugin distinguishes the motion controller from the I/O module via the `device_mode` field in the handshake response (0 = motion controller, 1 = I/O module). Each device has its own IP address.
+The I/O module is a second ESP32 board running the same firmware, with one setting changed. No separate download needed.
+
+1. Flash the same firmware onto a second ESP32 board using the [Web Flasher](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/)
+2. Connect to the board's WiFi hotspot (`WiFiCNC-XXXX`) and open the Protocol Tester at `192.168.4.1`
+3. Go to the **WiFi** tab, enter your network name and password, click **Save**. The board will reboot and join your network
+4. Reconnect to your normal network, use **Discover** to find the board's new IP address
+5. In the **Config** tab, I/O Module section: change **Device Mode** to "I/O Module"
+6. Set **Channels** to the number of buttons/outputs you need (e.g. 8)
+7. Set the **Dir Mask** -- each bit controls whether that channel is an input (0) or output (1). For example: `000F` makes channels 0-3 outputs and 4-15 inputs
+8. Set GPIO pin numbers for each channel in the pin fields (255 = unused)
+9. Click **Write & Save**, then reboot the board
+10. Come back to the Mach3 plugin's I/O Module tab (above) and enter the I/O module's IP address
+
+See the [Engineering Reference](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html#io-module-setup) for a detailed walkthrough with examples.
+
+**How it works:** The I/O module connects via its own TCP/UDP channels and reports input states. The plugin sends output states based on the function mapping above. The module does not run stepper or motion code -- it only handles digital I/O. The plugin tells them apart by the device mode field in the connection handshake. Each device has its own IP address.
 
 ### Tab 6: Pin Map
 
@@ -520,11 +535,28 @@ Feed hold (pressing "Feed Hold" or via G-code) sends a hold command to the contr
 
 ### WiFi vs Ethernet (W5500)
 
-The controller supports both WiFi and wired Ethernet via a W5500 SPI Ethernet module. **No software configuration is needed** -- the firmware automatically detects the W5500 at boot. If the W5500 is wired to the correct SPI pins and has a network cable connected, the controller uses Ethernet. If no W5500 is detected, it falls back to WiFi.
+The controller supports both WiFi and wired Ethernet via a W5500 SPI Ethernet module (such as the USR-ES1 breakout, available cheaply on Amazon/eBay). **No software configuration is needed** -- the firmware automatically detects the W5500 at power-on. If a W5500 module is wired up and an Ethernet cable is plugged in, the controller uses Ethernet. If no W5500 is detected, WiFi starts as normal.
 
-The W5500 uses the same lwIP TCP/IP stack as WiFi, so the protocol is identical. The plugin does not need to know whether the controller is using WiFi or Ethernet -- it connects by IP address either way.
+The plugin does not need to know whether the controller is using WiFi or Ethernet -- it connects by IP address either way.
 
-**W5500 wiring:** Connect the W5500 module to the ESP32-S3's SPI bus (MOSI, MISO, SCK, CS, INT, RST). The specific GPIO pins are defined in the firmware's `pin_config.h`. No jumpers or DIP switches are needed -- physical wiring is the only requirement.
+**Default wiring (Tiggy Pro board):**
+
+| W5500 Module Pin | Connect to | Notes |
+|------------------|-----------|-------|
+| 3.3V | ESP32 3V3 pin | Power supply |
+| GND | ESP32 GND pin | Ground |
+| MOSI | GPIO 45 | SPI data out |
+| MISO | GPIO 46 | SPI data in |
+| SCLK | GPIO 0 | SPI clock |
+| INT | GPIO 47 | Interrupt |
+| CS | Tie to GND | Always selected (saves a pin) |
+| RST | Tie to 3.3V | Always running (saves a pin) |
+
+Pins can be changed using the Protocol Tester's Pins tab if your hardware uses different GPIOs. See the [Engineering Reference](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html#ethernet-setup) for a full wiring diagram.
+
+### USB Serial (G-code Only)
+
+The USB port on the ESP32 provides a serial connection at 115,200 baud for GRBL-compatible G-code senders (UGS, CNCjs, bCNC, LaserGRBL). This gives you full 6-axis control over USB without needing WiFi or Ethernet. However, the Mach3 plugin and LinuxCNC HAL require WiFi or Ethernet -- they use the binary protocol which is not available over USB.
 
 ### Connection Sequence
 

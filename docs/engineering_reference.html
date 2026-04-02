@@ -137,6 +137,10 @@
     <li><a href="#protocol">Protocol Specification</a></li>
     <li><a href="#coexistence">Coexistence</a></li>
 
+    <li class="section">Setup Guides</li>
+    <li><a href="#ethernet-setup">Ethernet (W5500) Setup</a></li>
+    <li><a href="#io-module-setup">I/O Expansion Module Setup</a></li>
+
     <li class="section">Critical Behaviour</li>
     <li><a href="#constant-velocity">Constant Velocity Vectoring</a></li>
     <li><a href="#underrun">Buffer Underrun Recovery</a></li>
@@ -572,6 +576,151 @@ if (st.max_rate[i] &gt; CFG_MAX_AGGREGATE_STEP_RATE)
   <tr><td>23</td><td>TCP (telnet)</td><td>Bidirectional</td><td>G-code text interface (single client)</td></tr>
   <tr><td>UART0</td><td>Serial</td><td>Bidirectional</td><td>G-code text interface (115200 baud)</td></tr>
 </table>
+
+
+<!-- ============================================================ -->
+<h2 id="ethernet-setup">Ethernet (W5500) Setup</h2>
+<p>
+  The Tiggy Pro board supports wired Ethernet via an external W5500 SPI module (such as the
+  USR-ES1 breakout board). When a W5500 module is connected, the firmware automatically uses
+  Ethernet instead of WiFi. If no module is detected at power-on, WiFi starts as normal.
+  All your existing software (Mach3 plugin, LinuxCNC, G-code senders) works identically over
+  Ethernet &mdash; the only difference is you connect via a network cable instead of WiFi.
+</p>
+
+<h3>What You Need</h3>
+<ul>
+  <li>A <strong>USR-ES1</strong> or similar W5500 SPI-to-Ethernet module (available for a few pounds on Amazon/eBay/AliExpress)</li>
+  <li>5 jumper wires (female-to-female Dupont)</li>
+  <li>A standard Ethernet cable (Cat5e or better)</li>
+  <li>A router or switch on your local network</li>
+</ul>
+
+<h3>Wiring Diagram</h3>
+<p>Connect the W5500 module to the ESP32-S3-DevKitC using these 5 wires, plus power:</p>
+<div class="diagram">
+  USR-ES1 W5500 Module            ESP32-S3-DevKitC (Tiggy Pro board)
+  ========================        ====================================
+
+  3.3V  ───────────────────────── 3V3 pin
+  GND   ───────────────────────── GND pin
+  MOSI  ───────────────────────── GPIO 45
+  MISO  ───────────────────────── GPIO 46
+  SCLK  ───────────────────────── GPIO 0  (BOOT button pin, safe after startup)
+  CS    ── tie to GND ──────────── (not connected to ESP32, tied to module GND)
+  INT   ───────────────────────── GPIO 47
+  RST   ── tie to 3.3V ────────── (not connected to ESP32, tied to module 3V3)
+</div>
+<div class="info">
+  <strong>Why CS is tied to GND:</strong> The W5500 is the only device on the SPI bus, so it&rsquo;s
+  always selected. This saves a GPIO pin. If you later add other SPI devices, you can reassign a
+  GPIO for CS using the Protocol Tester.
+</div>
+
+<h3>Pin Summary</h3>
+<table>
+  <tr><th>W5500 Pin</th><th>ESP32 GPIO</th><th>Notes</th></tr>
+  <tr><td>MOSI</td><td>45</td><td>SPI data out (ESP32 &rarr; W5500)</td></tr>
+  <tr><td>MISO</td><td>46</td><td>SPI data in (W5500 &rarr; ESP32)</td></tr>
+  <tr><td>SCLK</td><td>0</td><td>SPI clock</td></tr>
+  <tr><td>INT</td><td>47</td><td>Interrupt (was Misc Input 2, reassigned for Ethernet)</td></tr>
+  <tr><td>CS</td><td>&mdash;</td><td>Tie to GND (always selected)</td></tr>
+  <tr><td>RST</td><td>&mdash;</td><td>Tie to 3.3V (always running)</td></tr>
+  <tr><td>3.3V</td><td>3V3</td><td>Power supply</td></tr>
+  <tr><td>GND</td><td>GND</td><td>Ground</td></tr>
+</table>
+
+<h3>Changing the Pins</h3>
+<p>
+  The default pins work out of the box with no configuration. If your board uses different GPIOs,
+  open the <strong>Protocol Tester</strong> (connect via WiFi first), go to the <strong>Pins</strong> tab,
+  and change the Ethernet pin fields (Eth MOSI, Eth MISO, Eth SCLK, Eth INT). Click
+  <strong>Write &amp; Save</strong> and reboot the controller.
+</p>
+
+<h3>How It Works</h3>
+<ol>
+  <li>On power-up, the firmware tries to initialise the W5500 over SPI</li>
+  <li>If a W5500 responds, the firmware uses Ethernet and waits up to 5 seconds for a DHCP address</li>
+  <li>If Ethernet gets an IP address, WiFi is not started &mdash; everything runs over Ethernet</li>
+  <li>If no W5500 is found (or no Ethernet cable plugged in), WiFi starts as normal</li>
+</ol>
+<p>
+  <strong>Nothing else changes.</strong> The same TCP/UDP ports, the same protocol, the same
+  software on the PC side. Your Mach3 plugin, LinuxCNC HAL, or G-code sender connects by IP
+  address &mdash; it doesn&rsquo;t matter whether that IP came from WiFi or Ethernet.
+</p>
+
+<div class="warning">
+  <strong>Note:</strong> Ethernet uses GPIO 47, which was previously Misc Input 2. If you need
+  all 4 misc inputs and don&rsquo;t want Ethernet, you can reassign GPIO 47 back to Misc Input 2
+  in the Protocol Tester Pins tab. The Tiggy Standard board (S3-Zero) is not affected &mdash; it has
+  no Ethernet support and keeps its original pin assignments.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 id="io-module-setup">I/O Expansion Module Setup</h2>
+<p>
+  You can use a second ESP32 board as an <strong>I/O expansion module</strong> to add extra
+  buttons, switches, and relay outputs to your CNC machine. This is useful for pendant controls,
+  external indicator lights, or additional limit switches.
+</p>
+<p>
+  The I/O module runs the <strong>same firmware</strong> as the main motion controller &mdash;
+  you just change one setting to switch it into I/O mode. No separate download or build is needed.
+</p>
+
+<h3>What You Need</h3>
+<ul>
+  <li>A second ESP32 board (any supported board &mdash; even a cheap ESP32-S3-Zero works well for this)</li>
+  <li>The same firmware flashed via the <a href="https://michaelgaylor.github.io/Tiggy_Wifi_Controller/">Web Flasher</a></li>
+  <li>Both boards on the same WiFi network</li>
+</ul>
+
+<h3>Step-by-Step Setup</h3>
+<ol>
+  <li><strong>Flash the firmware</strong> onto the second ESP32 board using the Web Flasher (same as the main controller)</li>
+  <li><strong>Connect to the board</strong> &mdash; it will create a WiFi hotspot called <code>WiFiCNC-XXXX</code>.
+      Connect your PC to that hotspot, then open the Protocol Tester and connect to <code>192.168.4.1</code></li>
+  <li><strong>Set up WiFi</strong> &mdash; go to the <strong>WiFi</strong> tab in the Protocol Tester,
+      enter your network name and password, click <strong>Save</strong>. The board will reboot and join your network</li>
+  <li><strong>Reconnect</strong> &mdash; connect your PC back to your normal WiFi network.
+      Use the Protocol Tester&rsquo;s <strong>Discover</strong> button to find the board&rsquo;s new IP address</li>
+  <li><strong>Switch to I/O Module mode</strong> &mdash; in the <strong>Config</strong> tab, find the
+      <strong>I/O Module</strong> section. Change <em>Device Mode</em> from &ldquo;Motion Controller&rdquo;
+      to &ldquo;I/O Module&rdquo;</li>
+  <li><strong>Set the number of channels</strong> &mdash; enter how many I/O pins you want to use
+      (e.g. 8 for 8 buttons/outputs)</li>
+  <li><strong>Set the direction</strong> &mdash; the Dir Mask controls which channels are inputs and which
+      are outputs. Each bit is one channel: 0 = input (button/switch), 1 = output (LED/relay).
+      For example, <code>00FF</code> means channels 0&ndash;7 are outputs, 8&ndash;15 are inputs</li>
+  <li><strong>Assign GPIO pins</strong> &mdash; in the channel GPIO pin fields, enter the GPIO number
+      for each channel. For example, if channel 0 is on GPIO 1, enter <code>1</code> in the first field.
+      Set unused channels to <code>255</code></li>
+  <li>Click <strong>Write &amp; Save</strong>, then reboot the board</li>
+  <li><strong>Configure the Mach3 plugin</strong> &mdash; in the plugin&rsquo;s <strong>I/O Module</strong> tab,
+      tick <em>Enable I/O Module</em>, enter the I/O module&rsquo;s IP address, and assign functions
+      to each input/output channel</li>
+</ol>
+
+<h3>How the I/O Module Communicates</h3>
+<p>
+  The I/O module uses the same TCP/UDP protocol as the main controller. It identifies itself as an
+  I/O module during the handshake (the <code>device_mode</code> field in the handshake response is 1
+  instead of 0). The Mach3 plugin connects to both the main controller and the I/O module using
+  separate IP addresses.
+</p>
+<ul>
+  <li><strong>Inputs:</strong> The I/O module reports button/switch states in its periodic status packets (same as the main controller reports limit switches)</li>
+  <li><strong>Outputs:</strong> The Mach3 plugin sends output commands to the I/O module (same packet format as spindle/coolant/misc outputs)</li>
+</ul>
+
+<div class="info">
+  <strong>Tip:</strong> The I/O module does not run the stepper engine or motion planner &mdash; it
+  skips those at startup. This means it uses less memory and boots faster. Any ESP32 board can be
+  an I/O module, even the compact S3-Zero.
+</div>
 
 
 <!-- ============================================================ -->

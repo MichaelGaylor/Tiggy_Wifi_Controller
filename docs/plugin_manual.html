@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiggy Motion Controller &mdash; Plugin User Manual</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --fg: #e0e0e0;
+    --fg2: #a0a0b0;
+    --accent: #e94560;
+    --green: #4ecca3;
+    --yellow: #f5c542;
+    --blue: #53a8d8;
+    --code-bg: #0d1117;
+    --border: #333355;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    padding: 0;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Navigation */
+  nav {
+    position: fixed; top: 0; left: 0; width: 280px; height: 100vh;
+    background: var(--bg2); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 20px 0; z-index: 100;
+  }
+  nav h2 { padding: 0 20px 10px; color: var(--accent); font-size: 1.1em; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  nav ul { list-style: none; }
+  nav ul li { padding: 0; }
+  nav ul li a { display: block; padding: 5px 20px; color: var(--fg2); font-size: 0.9em; }
+  nav ul li a:hover { background: var(--bg3); color: var(--fg); text-decoration: none; }
+  nav ul li.section { padding: 10px 20px 3px; color: var(--green); font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+
+  /* Main content */
+  main { margin-left: 280px; padding: 40px 60px; max-width: 1000px; }
+  h1 { color: var(--accent); font-size: 2em; margin-bottom: 10px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+  h2 { color: var(--green); font-size: 1.5em; margin-top: 40px; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+  h3 { color: var(--blue); font-size: 1.2em; margin-top: 25px; margin-bottom: 10px; }
+  h4 { color: var(--yellow); margin-top: 15px; margin-bottom: 8px; }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 10px 0 15px 30px; }
+  li { margin-bottom: 5px; }
+
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 3px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.9em;
+    color: var(--yellow);
+  }
+  pre {
+    background: var(--code-bg); padding: 15px 20px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0 20px; border: 1px solid var(--border);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em;
+    line-height: 1.5; color: var(--fg);
+  }
+  pre .comment { color: #6a737d; }
+  pre .keyword { color: #ff7b72; }
+  pre .string { color: #a5d6ff; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 0.9em; }
+  th { background: var(--bg3); color: var(--green); font-weight: 600; }
+  td { background: var(--bg2); }
+  td code { background: transparent; padding: 0; color: var(--yellow); }
+
+  .warning { background: #3d2b00; border-left: 4px solid var(--yellow); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .warning strong { color: var(--yellow); }
+  .info { background: #1a2d40; border-left: 4px solid var(--blue); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .info strong { color: var(--blue); }
+  .critical { background: #3d1a1a; border-left: 4px solid var(--accent); padding: 12px 16px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+  .critical strong { color: var(--accent); }
+
+  .diagram {
+    background: var(--code-bg); padding: 20px; border-radius: 6px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8em; line-height: 1.4; overflow-x: auto;
+    border: 1px solid var(--border); margin: 15px 0 20px; white-space: pre;
+  }
+
+  .file-tree { background: var(--code-bg); padding: 15px 20px; border-radius: 6px; font-family: monospace; font-size: 0.85em; line-height: 1.6; border: 1px solid var(--border); margin: 10px 0 20px; }
+  .file-tree .dir { color: var(--blue); font-weight: bold; }
+  .file-tree .file { color: var(--fg2); }
+  .file-tree .new { color: var(--green); }
+  .file-tree .mod { color: var(--yellow); }
+
+  @media (max-width: 900px) {
+    nav { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { margin-left: 0; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <h2>Plugin Manual</h2>
+  <ul>
+    <li class="section">1. Overview</li>
+    <li class="section">2. Installation</li>
+    <li><a href="#files">Files</a></li>
+    <li><a href="#steps">Steps</a></li>
+    <li><a href="#first-run">First Run</a></li>
+    <li class="section">3. Configuration Dialog</li>
+    <li><a href="#tab-1-connection">Tab 1: Connection</a></li>
+    <li><a href="#tab-2-axis-config">Tab 2: Axis Config</a></li>
+    <li><a href="#tab-3-inputs-outputs">Tab 3: Inputs / Outputs</a></li>
+    <li><a href="#tab-4-advanced">Tab 4: Advanced</a></li>
+    <li><a href="#tab-5-i-o-module">Tab 5: I/O Module</a></li>
+    <li><a href="#tab-6-pin-map">Tab 6: Pin Map</a></li>
+    <li class="section">4. Pin Map Files</li>
+    <li><a href="#file-location">File Location</a></li>
+    <li><a href="#file-format">File Format</a></li>
+    <li><a href="#sections">Sections</a></li>
+    <li><a href="#creating-a-custom-pin-map">Creating a Custom Pin Map</a></li>
+    <li class="section">5. Outputs</li>
+    <li><a href="#spindle">Spindle</a></li>
+    <li><a href="#coolant">Coolant</a></li>
+    <li><a href="#misc-outputs-extact1-5">Misc Outputs (EXTACT1-5)</a></li>
+    <li><a href="#m-code-macros-required">M-Code Macros (Required)</a></li>
+    <li><a href="#spindle-encoder-lathe-features">Spindle Encoder (Lathe Features)</a></li>
+    <li><a href="#charge-pump">Charge Pump</a></li>
+    <li><a href="#stepper-enable">Stepper Enable</a></li>
+    <li class="section">6. Inputs</li>
+    <li><a href="#limit-switches">Limit Switches</a></li>
+    <li><a href="#home-switches">Home Switches</a></li>
+    <li><a href="#e-stop">E-Stop</a></li>
+    <li><a href="#probe">Probe</a></li>
+    <li><a href="#misc-inputs-activation1-4">Misc Inputs (ACTIVATION1-4)</a></li>
+    <li class="section">7. Motion Control</li>
+    <li><a href="#trajectory-processing">Trajectory Processing</a></li>
+    <li><a href="#jogging">Jogging</a></li>
+    <li><a href="#dwell">Dwell</a></li>
+    <li><a href="#feed-hold-resume">Feed Hold / Resume</a></li>
+    <li class="section">8. Connection & Protocol</li>
+    <li><a href="#network-architecture">Network Architecture</a></li>
+    <li><a href="#wifi-vs-ethernet-w5500">WiFi vs Ethernet (W5500)</a></li>
+    <li><a href="#usb-serial-g-code-only">USB Serial (G-code Only)</a></li>
+    <li><a href="#connection-sequence">Connection Sequence</a></li>
+    <li><a href="#auto-discovery">Auto-Discovery</a></li>
+    <li><a href="#reconnection">Reconnection</a></li>
+    <li class="section">9. Registry Settings</li>
+    <li class="section">10. Debug Log</li>
+    <li class="section">11. Troubleshooting</li>
+    <li><a href="#dros-show-inf-or-wrong-values-on-startup">DROs show #INF or wrong values on startup</a></li>
+    <li><a href="#e-stop-triggers-with-nothing-connected">E-stop triggers with nothing connected</a></li>
+    <li><a href="#homing-completes-instantly-without-touching-switches">Homing completes instantly without touching switches</a></li>
+    <li><a href="#homing-only-moves-one-axis">Homing only moves one axis</a></li>
+    <li><a href="#cannot-connect-to-controller">Cannot connect to controller</a></li>
+    <li><a href="#limit-switches-not-working">Limit switches not working</a></li>
+    <li><a href="#input-function-buttons-don-t-trigger">Input function buttons don't trigger</a></li>
+    <li><a href="#plugin-dll-locked-cannot-update">Plugin DLL locked / cannot update</a></li>
+    <li class="section">12. Firmware Compatibility</li>
+    <li><a href="#protocol-version">Protocol Version</a></li>
+    <li><a href="#configuration-keys-sent-to-controller">Configuration Keys Sent to controller</a></li>
+  </ul>
+</nav>
+
+<main>
+<h1 id="tiggy-motion-controller-plugin-user-manual">Tiggy Motion Controller Plugin - User Manual</h1>
+
+<h2 id="1-overview">1. Overview</h2>
+
+<p>The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a wireless (or wired Ethernet) motion controller. It communicates over TCP (control/config) and UDP (real-time motion/status) to deliver step pulses, read inputs, and control spindle/coolant outputs.</p>
+
+<p><strong>Key features:</strong></p>
+
+<ul>
+  <li>Up to 6 axes (X, Y, Z, A, B, C) with independent step/direction control -- Pro Mach3 license required for A/B/C axes; Free tier supports X/Y/Z</li>
+  <li>Axis configuration (steps/unit, velocity, accel) in the plugin dialog</li>
+  <li>Signal inversion configured in the plugin's own settings dialog</li>
+  <li>Real-time position feedback and DRO display</li>
+  <li>Limit switches, home switches, E-stop, and probe inputs</li>
+  <li>Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs</li>
+  <li>Spindle encoder feedback for threading (G33/G76) and CSS (G96)</li>
+  <li>5 misc outputs (EXTACT1-5) and 4 misc inputs (ACTIVATION1-4)</li>
+  <li>Input function mapping: assign physical buttons to Mach3 actions</li>
+  <li>I/O expansion module with B/C axis jog support</li>
+  <li>Board pin map profiles for different hardware configurations</li>
+  <li>Auto-discovery of controllers on the network</li>
+  <li>Automatic reconnection with exponential backoff</li>
+
+</ul>
+<p><strong>Supported boards:</strong></p>
+
+<table>
+  <tr><th>Board</th><th>MCU</th><th>Wired Axes</th><th>Misc Inputs</th></tr>
+  <tr><td>Tiggy Standard board (ESP32-S3-Zero)</td><td>Waveshare ESP32-S3-Zero (FH4R2)</td><td>3 (X/Y/Z)</td><td>0</td></tr>
+  <tr><td>Tiggy Pro board (ESP32-S3-DevKitC)</td><td>ESP32-S3-DevKitC-1 N16R8</td><td>6 (X/Y/Z/A/B/C)</td><td>4</td></tr>
+  <tr><td>Classic board (ESP32-WROOM-32)</td><td>ESP32-WROOM-32 DevKit</td><td>6 (limited I/O)</td><td>0</td></tr>
+</table>
+
+<p><strong>Mach3 Plugin Licensing:</strong> The Free tier supports 3 axes (X/Y/Z). The Pro Mach3 license unlocks 6 axes, I/O expansion module, and spindle encoder threading. Note: the ESP32 firmware is open source and supports all 6 axes with no restrictions. If you use LinuxCNC, GRBL senders, or any other host software, all 6 axes work for free. The 3-axis limit applies <strong>only</strong> to the Mach3 plugin. Download from <a href="https://www.tiggyengineering.com">www.tiggyengineering.com</a>.</p>
+
+<hr>
+
+<h2 id="2-installation">2. Installation</h2>
+
+<h3 id="files">Files</h3>
+
+<table>
+  <tr><th>File</th><th>Location</th><th>Purpose</th></tr>
+  <tr><td><code>Tiggy.dll</code></td><td><code>C:\Mach3\PlugIns\</code></td><td>The plugin DLL</td></tr>
+  <tr><td><code>*.pinmap</code></td><td><code>C:\Mach3\PlugIns\</code></td><td>Board pin map files (one per board type)</td></tr>
+  <tr><td><code>M62.m1s</code> - <code>M65.m1s</code></td><td><code>C:\Mach3\macros\Mach3Mill\</code></td><td>VBScript macros for digital output control</td></tr>
+</table>
+
+<h3 id="steps">Steps</h3>
+
+<ol>
+  <li>Close Mach3 completely.</li>
+  <li>Copy <code>Tiggy.dll</code> to <code>C:\Mach3\PlugIns\</code>.</li>
+  <li>Copy the <code>.pinmap</code> files (e.g. <code>tiggy_standard.pinmap</code>, <code>tiggy_pro.pinmap</code>) to the same <code>C:\Mach3\PlugIns\</code> folder.</li>
+  <li>Copy <code>M62.m1s</code>, <code>M63.m1s</code>, <code>M64.m1s</code>, and <code>M65.m1s</code> to <code>C:\Mach3\macros\Mach3Mill\</code> (or your active profile's macro folder).</li>
+  <li>Launch Mach3.</li>
+  <li>Go to <strong>Config > Select Motion Device</strong> and choose <strong>Tiggy Motion Controller</strong>.</li>
+  <li>Restart Mach3. The plugin will load and attempt to connect to the controller.</li>
+
+</ol>
+<h3 id="first-run">First Run</h3>
+
+<p>On first run the plugin creates default settings in the Windows registry under <code>HKEY_CURRENT_USER\Software\Tiggy</code>. It will try to connect to <code>192.168.4.1</code> (the controller's default access-point IP). If that fails, it runs a 5-second UDP auto-discovery broadcast.</p>
+
+<hr>
+
+<h2 id="3-configuration-dialog">3. Configuration Dialog</h2>
+
+<p>Open the plugin settings via <strong>Config > Tiggy Motion Controller...</strong> in the Mach3 menu bar.</p>
+
+<p>The dialog has <strong>6 tabs</strong>:</p>
+
+<h3 id="tab-1-connection">Tab 1: Connection</h3>
+
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>Controller IP Address</td><td>The IP address of your controller</td></tr>
+  <tr><td>Connect</td><td>Manually connect to the entered IP</td></tr>
+  <tr><td>Disconnect</td><td>Disconnect from the current controller</td></tr>
+  <tr><td>Auto-Discover</td><td>Broadcast a discovery packet to find the controller on your network</td></tr>
+  <tr><td>Status</td><td>Shows CONNECTED or DISCONNECTED</td></tr>
+  <tr><td>Spindle RPM</td><td>Live RPM reading from the spindle encoder (updated every 500ms)</td></tr>
+</table>
+
+<p>The IP address is saved to the registry. On each Mach3 startup the plugin tries:</p>
+<ol>
+  <li>The saved IP</li>
+  <li>UDP auto-discovery (5 second timeout)</li>
+  <li>Default AP IP <code>192.168.4.1</code></li>
+
+</ol>
+<p><strong>Spindle Encoder:</strong> The motion controller board has a PCNT-based spindle encoder input. The RPM is read from the controller's status reports and displayed live on this tab. If no encoder is connected, the RPM reads 0.</p>
+
+<h3 id="tab-2-axis-config">Tab 2: Axis Config</h3>
+
+<p>Replaces Mach3's Motor Tuning panel. The plugin owns all motion parameters.</p>
+
+<table>
+  <tr><th>Column</th><th>Description</th></tr>
+  <tr><td>On</td><td>Enable/disable the axis</td></tr>
+  <tr><td>Steps/Unit</td><td>Steps per user unit (mm or inch, matches your Mach3 units setting)</td></tr>
+  <tr><td>Velocity (u/min)</td><td>Maximum velocity in user units per minute</td></tr>
+  <tr><td>Accel (u/s^2)</td><td>Acceleration in user units per second squared</td></tr>
+</table>
+
+<p><strong>All 6 axes</strong> (X, Y, Z, A, B, C) are listed. Only enable the axes your machine physically has. Axes A, B, and C require a Pro Mach3 license.</p>
+
+<p>These values are written into Mach3's internal MainPlanner structure so that DRO display works correctly. You do <strong>not</strong> need to configure Motor Tuning in Mach3 separately.</p>
+
+<h3 id="tab-3-inputs-outputs">Tab 3: Inputs / Outputs</h3>
+
+<p>This tab has three sections:</p>
+
+<h4 id="input-status-live-from-controller">Input Status (live from controller)</h4>
+
+<p>Displays real-time state of all input signals, updated every 200ms while the tab is open:</p>
+
+<table>
+  <tr><th>Signal</th><th>Source</th></tr>
+  <tr><td>X/Y/Z/A/B/C Limit</td><td><code>status.limit_switches</code> bitmask</td></tr>
+  <tr><td>X/Y/Z/A/B/C Home</td><td><code>status.home_switches</code> bitmask</td></tr>
+  <tr><td>E-Stop</td><td><code>status.estop_input</code></td></tr>
+  <tr><td>Probe</td><td><code>status.probe_state</code></td></tr>
+</table>
+
+<p>Each input signal has an <strong>Inv</strong> (invert) checkbox. E-Stop and Probe also have inversion checkboxes.</p>
+
+<p><strong>Inversion behaviour:</strong></p>
+
+<table>
+  <tr><th>Signal</th><th>Raw Source</th><th>Inversion Applied By</th></tr>
+  <tr><td>Limit switches</td><td>Firmware debounce callback</td><td>Plugin sends inversion bitmask to firmware</td></tr>
+  <tr><td>Home switches</td><td>Firmware homing cycle</td><td>Plugin sends inversion bitmask to firmware</td></tr>
+  <tr><td>E-Stop</td><td>Firmware sends raw GPIO state</td><td>Plugin applies inversion</td></tr>
+  <tr><td>Probe</td><td>Firmware sends raw GPIO state</td><td>Plugin applies inversion</td></tr>
+</table>
+
+<p><strong>Tip:</strong> If a signal shows ON with nothing connected, tick its Inv checkbox.</p>
+
+<h4 id="misc-input-functions-button-press-action">Misc Input Functions (button press -> action)</h4>
+
+<p>Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each dropdown maps a physical button press on the controller's GPIO to a Mach3 action:</p>
+
+<table>
+  <tr><th>Function</th><th>DoButton Code</th><th>Description</th></tr>
+  <tr><td>None</td><td>0</td><td>No action (disabled)</td></tr>
+  <tr><td>Cycle Start</td><td>1000</td><td>Starts G-code execution</td></tr>
+  <tr><td>Feed Hold</td><td>1001</td><td>Pauses motion (resumable)</td></tr>
+  <tr><td>Stop</td><td>1003</td><td>Stops the current program</td></tr>
+  <tr><td>E-Stop</td><td>1021</td><td>Triggers emergency stop</td></tr>
+  <tr><td>Reset</td><td>1022</td><td>Resets Mach3 after E-stop</td></tr>
+  <tr><td>Rewind</td><td>1010</td><td>Rewinds to start of program</td></tr>
+  <tr><td>Single Block</td><td>1002</td><td>Toggles single-block mode</td></tr>
+</table>
+
+<p><strong>How it works:</strong> The plugin monitors <code>ACTIVATION1</code> through <code>ACTIVATION4</code> input signals (mapped from the controller's misc input GPIOs). On a <strong>rising edge</strong> (0 to 1 transition), it calls Mach3's <code>DoButton()</code> function with the configured code. This means pressing a physical button once triggers the action once -- holding the button does not repeat the action.</p>
+
+<p><strong>Example setup:</strong></p>
+<ul>
+  <li>Input 1 = Cycle Start (wire a green "Go" button to Misc In 1 on the controller)</li>
+  <li>Input 2 = Feed Hold (wire a yellow "Pause" button to Misc In 2)</li>
+  <li>Input 3 = E-Stop (wire a red mushroom button to Misc In 3)</li>
+  <li>Input 4 = Reset (wire a momentary "Reset" button to Misc In 4)</li>
+
+</ul>
+<p><strong>Note:</strong> The Tiggy Standard board has no misc input GPIOs assigned (all show <code>n/a</code> in Pin Map). The Tiggy Pro board has 3 misc inputs on GPIO 18, 21, and 32. (GPIO 47 was reassigned to the W5500 Ethernet interrupt pin.)</p>
+
+
+<h3 id="tab-4-advanced">Tab 4: Advanced</h3>
+
+<h4 id="timing">Timing</h4>
+
+<table>
+  <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  <tr><td>Step Pulse</td><td>5 us</td><td>Width of each step pulse in microseconds</td></tr>
+  <tr><td>Dir Setup</td><td>5 us</td><td>Time between direction change and first step pulse</td></tr>
+</table>
+
+<h4 id="step-dir-inversion">Step/Dir Inversion</h4>
+
+<p>Per-axis checkboxes to invert the step and direction signals. Use these if your stepper drivers expect opposite polarity.</p>
+
+<h4 id="homing">Homing</h4>
+
+<table>
+  <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  <tr><td>Direction (+)</td><td>All unchecked</td><td>Per-axis: tick if the axis should home toward the positive end</td></tr>
+  <tr><td>Seek rate</td><td>500 steps/sec</td><td>Fast approach speed during homing</td></tr>
+  <tr><td>Feed rate</td><td>50 steps/sec</td><td>Slow approach speed (fine positioning)</td></tr>
+  <tr><td>Pulloff</td><td>200 steps</td><td>Distance to back off after finding the switch</td></tr>
+</table>
+
+<p><strong>How homing works:</strong> When you press "Ref All Home" in Mach3, the plugin sends a home command to the controller with a bitmask of all enabled axes. The controller firmware handles the entire homing sequence (seek, find switch, back off, re-approach slowly, set zero). On completion, the plugin zeros the axis positions and sets the <code>Referenced</code> flag.</p>
+
+<p><strong>Homing tips:</strong></p>
+<ul>
+  <li>If an axis homes the wrong direction, tick its Direction (+) checkbox</li>
+  <li>If homing completes instantly without touching the switch, the home switch inversion is probably wrong -- check the Inputs tab</li>
+  <li>Increase Seek rate for faster homing on long-travel machines</li>
+  <li>Increase Pulloff if you need more clearance after homing</li>
+
+</ul>
+<h4 id="spindle">Spindle</h4>
+
+<table>
+  <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  <tr><td>PWM Freq</td><td>1000 Hz</td><td>Spindle PWM frequency</td></tr>
+  <tr><td>Max RPM</td><td>24000</td><td>Maximum spindle RPM (maps to 100% PWM duty)</td></tr>
+</table>
+
+<h4 id="charge-pump-step-idle-laser">Charge Pump / Step Idle / Laser</h4>
+
+<table>
+  <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  <tr><td>Charge Pump</td><td>0 Hz</td><td>Charge pump PWM frequency. 0 = disabled. Set to e.g. 10000 for a 10kHz charge pump signal</td></tr>
+  <tr><td>Step Idle</td><td>0 ms</td><td>Time after last motion before disabling stepper drivers. 0 = never disable</td></tr>
+  <tr><td>Laser Mode</td><td>Unchecked</td><td>When enabled, spindle PWM output tracks the current feed rate proportionally. Used for laser cutting/engraving where power must vary with speed</td></tr>
+</table>
+
+<h3 id="tab-5-i-o-module">Tab 5: I/O Module</h3>
+
+<p>Configures the optional I/O expansion module -- a second controller board running in I/O module mode, used for pendant buttons and external relay outputs.</p>
+
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>Enable I/O Module</td><td>Connect to the I/O module on startup</td></tr>
+  <tr><td>IP</td><td>IP address of the I/O expansion module</td></tr>
+  <tr><td>Status</td><td>Shows Connected or Not connected</td></tr>
+</table>
+
+<h4 id="input-functions">Input Functions</h4>
+
+<p>Eight input channels (In 0 - In 7) can each be assigned a function:</p>
+
+<table>
+  <tr><th>Function</th><th>Code</th><th>Description</th></tr>
+  <tr><td>None</td><td>0</td><td>Disabled</td></tr>
+  <tr><td>Jog X+/X-/Y+/Y-/Z+/Z-/A+/A-/B+/B-/C+/C-</td><td>101-112</td><td>Jog the specified axis in the specified direction</td></tr>
+  <tr><td>Cycle Start</td><td>1000</td><td>Start G-code execution</td></tr>
+  <tr><td>Feed Hold</td><td>1001</td><td>Pause motion</td></tr>
+  <tr><td>Stop</td><td>1003</td><td>Stop the current program</td></tr>
+  <tr><td>E-Stop</td><td>1021</td><td>Emergency stop</td></tr>
+  <tr><td>Reset</td><td>1022</td><td>Reset after E-stop</td></tr>
+</table>
+
+<p>The I/O module sends button press events to the plugin. Jog speed is taken from the axis configuration (Axis Config tab velocity setting), not set separately on the I/O module.</p>
+
+<h4 id="output-functions">Output Functions</h4>
+
+<p>Eight output channels (Out 0 - Out 7) can each mirror a Mach3 signal:</p>
+
+<table>
+  <tr><th>Function</th><th>Code</th><th>Description</th></tr>
+  <tr><td>None</td><td>0</td><td>Disabled</td></tr>
+  <tr><td>Spindle CW</td><td>1</td><td>Mirrors spindle clockwise state</td></tr>
+  <tr><td>Spindle CCW</td><td>2</td><td>Mirrors spindle counter-clockwise state</td></tr>
+  <tr><td>Flood</td><td>3</td><td>Mirrors flood coolant state</td></tr>
+  <tr><td>Mist</td><td>4</td><td>Mirrors mist coolant state</td></tr>
+  <tr><td>Output 1-4</td><td>5-8</td><td>Mirrors misc output states</td></tr>
+</table>
+
+<p><strong>How to set up an I/O module (firmware side):</strong></p>
+
+<p>The I/O module is a second ESP32 board running the same firmware, with one setting changed. No separate download needed.</p>
+
+<ol>
+  <li>Flash the same firmware onto a second ESP32 board using the <a href="https://michaelgaylor.github.io/Tiggy_Wifi_Controller/">Web Flasher</a></li>
+  <li>Connect to the board's WiFi hotspot (<code>WiFiCNC-XXXX</code>) and open the Protocol Tester at <code>192.168.4.1</code></li>
+  <li>Go to the <strong>WiFi</strong> tab, enter your network name and password, click <strong>Save</strong>. The board will reboot and join your network</li>
+  <li>Reconnect to your normal network, use <strong>Discover</strong> to find the board's new IP address</li>
+  <li>In the <strong>Config</strong> tab, I/O Module section: change <strong>Device Mode</strong> to "I/O Module"</li>
+  <li>Set <strong>Channels</strong> to the number of buttons/outputs you need (e.g. 8)</li>
+  <li>Set the <strong>Dir Mask</strong> -- each bit controls whether that channel is an input (0) or output (1). For example: <code>000F</code> makes channels 0-3 outputs and 4-15 inputs</li>
+  <li>Set GPIO pin numbers for each channel in the pin fields (255 = unused)</li>
+  <li>Click <strong>Write & Save</strong>, then reboot the board</li>
+  <li>Come back to the Mach3 plugin's I/O Module tab (above) and enter the I/O module's IP address</li>
+
+</ol>
+<p>See the <a href="https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html#io-module-setup">Engineering Reference</a> for a detailed walkthrough with examples.</p>
+
+<p><strong>How it works:</strong> The I/O module connects via its own TCP/UDP channels and reports input states. The plugin sends output states based on the function mapping above. The module does not run stepper or motion code -- it only handles digital I/O. The plugin tells them apart by the device mode field in the connection handshake. Each device has its own IP address.</p>
+
+<h3 id="tab-6-pin-map">Tab 6: Pin Map</h3>
+
+<p>Displays the GPIO pin assignments for the selected controller board.</p>
+
+<h4 id="board-selector">Board Selector</h4>
+
+<p>A dropdown listing all board profiles found in the <code>PlugIns</code> folder (loaded from <code>.pinmap</code> files). Select your board to see its pin assignments.</p>
+
+<h4 id="pin-display">Pin Display</h4>
+
+<p>Read-only display of all GPIO assignments, organised into groups:</p>
+
+<ul>
+  <li><strong>Step / Direction Pins</strong> -- 6 axes, step and direction GPIO for each</li>
+  <li><strong>Limit / Home Switch Pins</strong> -- 6 axes, limit and home GPIO for each</li>
+  <li><strong>Output Pins</strong> -- Enable, Spindle, Charge Pump, Misc Out 1-2</li>
+  <li><strong>Input Pins</strong> -- E-Stop, Probe, Misc In 1-4, Status LED</li>
+
+</ul>
+<p>A pin value of <code>n/a</code> means that function is not available on the selected board.</p>
+
+<hr>
+
+<h2 id="4-pin-map-files">4. Pin Map Files</h2>
+
+<p>Pin map files (<code>.pinmap</code>) are plain text files that define the GPIO assignments for a specific controller board. They use a simple INI-style format.</p>
+
+<h3 id="file-location">File Location</h3>
+
+<p>Place <code>.pinmap</code> files in the same folder as the plugin DLL: <code>C:\Mach3\PlugIns\</code></p>
+
+<p>The plugin scans this folder on startup and when the config dialog opens, finding all files with the <code>.pinmap</code> extension.</p>
+
+<h3 id="file-format">File Format</h3>
+
+<pre>
+# Comment lines start with #
+
+[Board]
+Name=Tiggy Standard Motion Controller
+Description=Compact 3-axis controller
+
+[Step]
+X=1
+Y=2
+Z=42
+A=-1
+B=-1
+C=-1
+
+[Direction]
+X=3
+Y=4
+Z=41
+A=-1
+B=-1
+C=-1
+
+[Limits]
+X=5
+Y=6
+Z=7
+A=-1
+B=-1
+C=-1
+
+[Home]
+X=5
+Y=6
+Z=7
+A=-1
+B=-1
+C=-1
+
+[Outputs]
+Enable=8
+Spindle=9
+ChargePump=10
+MiscOut1=11
+MiscOut2=12
+LED=48
+
+[Inputs]
+EStop=13
+Probe=14
+MiscIn1=-1
+MiscIn2=-1
+MiscIn3=-1
+MiscIn4=-1
+</pre>
+
+<h3 id="sections">Sections</h3>
+
+<table>
+  <tr><th>Section</th><th>Keys</th><th>Description</th></tr>
+  <tr><td><code>[Board]</code></td><td><code>Name</code>, <code>Description</code></td><td>Board identity. Name is used in the dropdown selector</td></tr>
+  <tr><td><code>[Step]</code></td><td><code>X</code>, <code>Y</code>, <code>Z</code>, <code>A</code>, <code>B</code>, <code>C</code></td><td>GPIO numbers for step pulse outputs</td></tr>
+  <tr><td><code>[Direction]</code></td><td><code>X</code>, <code>Y</code>, <code>Z</code>, <code>A</code>, <code>B</code>, <code>C</code></td><td>GPIO numbers for direction outputs</td></tr>
+  <tr><td><code>[Limits]</code></td><td><code>X</code>, <code>Y</code>, <code>Z</code>, <code>A</code>, <code>B</code>, <code>C</code></td><td>GPIO numbers for limit switch inputs</td></tr>
+  <tr><td><code>[Home]</code></td><td><code>X</code>, <code>Y</code>, <code>Z</code>, <code>A</code>, <code>B</code>, <code>C</code></td><td>GPIO numbers for home switch inputs</td></tr>
+  <tr><td><code>[Outputs]</code></td><td><code>Enable</code>, <code>Spindle</code>, <code>ChargePump</code>, <code>MiscOut1</code>, <code>MiscOut2</code>, <code>LED</code></td><td>GPIO numbers for output pins</td></tr>
+  <tr><td><code>[Inputs]</code></td><td><code>EStop</code>, <code>Probe</code>, <code>MiscIn1</code>-<code>MiscIn4</code></td><td>GPIO numbers for input pins</td></tr>
+</table>
+
+<p>A pin value of <code>-1</code> means the function is not available on this board.</p>
+
+<h3 id="creating-a-custom-pin-map">Creating a Custom Pin Map</h3>
+
+<ol>
+  <li>Copy an existing <code>.pinmap</code> file and rename it (e.g. <code>my_custom_board.pinmap</code>)</li>
+  <li>Edit the <code>[Board]</code> section with your board's name and description</li>
+  <li>Update all GPIO numbers to match your hardware wiring</li>
+  <li>Place the file in <code>C:\Mach3\PlugIns\</code></li>
+  <li>Open the plugin config dialog -- your board will appear in the Pin Map tab dropdown</li>
+
+</ol>
+<hr>
+
+<h2 id="5-outputs">5. Outputs</h2>
+
+<h3 id="spindle">Spindle</h3>
+
+<p>The plugin monitors <code>Engine->SpindleCW</code> and <code>Engine->SpindleCCW</code> and sends spindle state to the controller in real-time. Supported G-codes:</p>
+
+<table>
+  <tr><th>G-Code</th><th>Action</th></tr>
+  <tr><td>M3 Sxxxx</td><td>Spindle CW at xxxx RPM</td></tr>
+  <tr><td>M4 Sxxxx</td><td>Spindle CCW at xxxx RPM</td></tr>
+  <tr><td>M5</td><td>Spindle stop</td></tr>
+</table>
+
+<p>RPM is mapped to PWM duty cycle based on the Max RPM setting.</p>
+
+<h3 id="coolant">Coolant</h3>
+
+<table>
+  <tr><th>G-Code</th><th>Action</th></tr>
+  <tr><td>M7</td><td>Mist coolant ON</td></tr>
+  <tr><td>M8</td><td>Flood coolant ON</td></tr>
+  <tr><td>M9</td><td>All coolant OFF</td></tr>
+</table>
+
+<h3 id="misc-outputs-extact1-5">Misc Outputs (EXTACT1-5)</h3>
+
+<p>Five general-purpose digital outputs controlled via Mach3's external activation signals. These map to the controller's <code>misc_outputs</code> bitmask:</p>
+
+<table>
+  <tr><th>Signal</th><th>Bit</th><th>Immediate On/Off</th><th>Motion-Synced On/Off</th></tr>
+  <tr><td>EXTACT1 (Output #1)</td><td>0</td><td>M64 P0 / M65 P0</td><td>M62 P0 / M63 P0</td></tr>
+  <tr><td>EXTACT2 (Output #2)</td><td>1</td><td>M64 P1 / M65 P1</td><td>M62 P1 / M63 P1</td></tr>
+  <tr><td>EXTACT3 (Output #3)</td><td>2</td><td>M64 P2 / M65 P2</td><td>M62 P2 / M63 P2</td></tr>
+  <tr><td>EXTACT4 (Output #4)</td><td>3</td><td>M64 P3 / M65 P3</td><td>M62 P3 / M63 P3</td></tr>
+  <tr><td>EXTACT5 (Output #5)</td><td>4</td><td>M64 P4 / M65 P4</td><td>M62 P4 / M63 P4</td></tr>
+</table>
+
+<p><strong>Immediate vs motion-synced:</strong></p>
+<ul>
+  <li><strong>M64/M65</strong> (immediate): The output changes instantly when the M-code is executed, even if motion is still in progress from a previous line.</li>
+  <li><strong>M62/M63</strong> (motion-synced): The macro waits for all queued motion to complete before changing the output. Use these when timing matters (e.g. activating a clamp after a move completes).</li>
+
+</ul>
+<p><strong>Hardware availability:</strong> The Tiggy Standard board has 2 misc output GPIOs (Output #1 on GPIO 11, Output #2 on GPIO 12). The Tiggy Pro board also has 2 misc output GPIOs. Outputs #3-#5 are reserved for future expansion.</p>
+
+<h3 id="m-code-macros-required">M-Code Macros (Required)</h3>
+
+<p>Mach3 requires VBScript macro files for M62-M65 to work with external motion controllers. These files <strong>must</strong> be in your Mach3 macro folder (e.g. <code>C:\Mach3\macros\Mach3Mill\</code>).</p>
+
+<table>
+  <tr><th>File</th><th>M-Code</th><th>Function</th></tr>
+  <tr><td><code>M62.m1s</code></td><td>M62 Pn</td><td>Synchronized digital output ON (waits for motion to finish)</td></tr>
+  <tr><td><code>M63.m1s</code></td><td>M63 Pn</td><td>Synchronized digital output OFF (waits for motion to finish)</td></tr>
+  <tr><td><code>M64.m1s</code></td><td>M64 Pn</td><td>Immediate digital output ON</td></tr>
+  <tr><td><code>M65.m1s</code></td><td>M65 Pn</td><td>Immediate digital output OFF</td></tr>
+</table>
+
+<p>The <code>P</code> parameter selects which output: P0 = Output #1, P1 = Output #2, etc.</p>
+
+<p><strong>How the macros work:</strong> Each macro calls <code>ActivateSignal()</code> or <code>DeActivateSignal()</code> with the Mach3 signal index for the corresponding EXTACT output (EXTACT1 = signal 7, EXTACT2 = signal 8, etc.). The plugin monitors these signals and forwards the state to the controller.</p>
+
+<p><strong>Example G-code:</strong></p>
+<pre>
+G0 X10 Y10          ; Rapid to position
+M64 P0              ; Turn on Output #1 immediately
+G1 X50 F500         ; Linear move
+M62 P1              ; Turn on Output #2 after move completes
+G4 P2               ; Dwell 2 seconds
+M65 P0              ; Turn off Output #1
+M63 P1              ; Turn off Output #2 after any pending motion
+</pre>
+
+<h3 id="spindle-encoder-lathe-features">Spindle Encoder (Lathe Features)</h3>
+
+<p>The controller supports a quadrature spindle encoder with index pulse for lathe operations:</p>
+
+<table>
+  <tr><th>Feature</th><th>G-Code</th><th>Description</th></tr>
+  <tr><td>Threading</td><td>G33 / G76</td><td>Spindle-synchronized Z moves for thread cutting</td></tr>
+  <tr><td>CSS</td><td>G96</td><td>Constant Surface Speed -- RPM auto-adjusts with X position</td></tr>
+  <tr><td>RPM mode</td><td>G97</td><td>Fixed RPM mode (standard)</td></tr>
+</table>
+
+<p><strong>Setup:</strong></p>
+<ol>
+  <li>Connect encoder A, B, and Index signals to the GPIO pins shown in Pin Map</li>
+  <li>The encoder PPR (pulses per revolution) is detected at handshake</li>
+  <li>Spindle position is fed to Mach3's <code>Engine->CurrentSpindleCount</code> at 50ms intervals</li>
+  <li>Index pulse edges are reported to Mach3 for thread start synchronization</li>
+  <li>Set Mach3 to <strong>Lathe mode</strong> in Config > General Config (this is a Mach3 setting, not plugin-controlled)</li>
+
+</ol>
+<p>Live spindle RPM is displayed on the Connection tab.</p>
+
+<h3 id="charge-pump">Charge Pump</h3>
+
+<p>When enabled (frequency > 0), the plugin sends a PWM frequency to the controller's charge pump GPIO. The charge pump activates when:</p>
+<ul>
+  <li>Mach3's "Charge Pump Always On" is enabled, OR</li>
+  <li>The CHARGE output signal is activated</li>
+
+</ul>
+<p>Setting the frequency to 0 disables the charge pump.</p>
+
+<h3 id="stepper-enable">Stepper Enable</h3>
+
+<p>The shared stepper enable pin is controlled by the controller firmware. The Step Idle setting determines how long after the last motion before steppers are disabled (0 = never disable).</p>
+
+<hr>
+
+<h2 id="6-inputs">6. Inputs</h2>
+
+<h3 id="limit-switches">Limit Switches</h3>
+
+<p>One limit switch input per axis. A single GPIO serves both the positive and negative limit (the plugin sets both <code>LIMITPLUS</code> and <code>LIMITMINUS</code> from the same bit). Inversion is applied by the plugin.</p>
+
+<p>When a limit switch triggers during motion, Mach3 will E-stop.</p>
+
+<h3 id="home-switches">Home Switches</h3>
+
+<p>One home switch input per axis. Often shared with the limit switch GPIO (same physical switch). Inversion is applied by the <strong>firmware</strong> (sent via <code>WCNC_CFG_INVERT_HOME</code>).</p>
+
+<h3 id="e-stop">E-Stop</h3>
+
+<p>Single GPIO input. Inversion applied by the plugin. When triggered, the plugin:</p>
+<ol>
+  <li>Sets <code>Engine->InSigs[EMERGENCY].Activated = true</code></li>
+  <li>Mach3 enters E-stop state</li>
+  <li>Plugin sends E-stop command to controller</li>
+
+</ol>
+<p>If the controller reports ESTOP or ALARM state, the plugin also triggers Mach3's E-stop via <code>DoButton(OEM_ESTOP)</code>.</p>
+
+<h3 id="probe">Probe</h3>
+
+<p>Single GPIO input for touch probes and tool length sensors. Inversion applied by the plugin. Used by G38.2 probing cycles.</p>
+
+<h3 id="misc-inputs-activation1-4">Misc Inputs (ACTIVATION1-4)</h3>
+
+<p>Four general-purpose digital inputs from controller GPIO. These show up in Mach3 as Input #1 through Input #4. Each can be assigned a function via the Input Function Mapping dropdowns (see Tab 3: Inputs).</p>
+
+<hr>
+
+<h2 id="7-motion-control">7. Motion Control</h2>
+
+<h3 id="trajectory-processing">Trajectory Processing</h3>
+
+<p>The plugin reads Mach3's trajectory buffer (<code>Engine->TrajBuffer</code>) at ~10-50Hz, converts trajectory points into motion segments, and sends them to the controller over UDP. The data path:</p>
+
+<pre>
+Mach3 Trajectory Buffer -&gt; SegmentBuilder -&gt; BufferManager -&gt; NetworkClient -&gt; controller
+</pre>
+
+<p>Flow control is managed by monitoring the controller's buffer occupancy in its status reports.</p>
+
+<h3 id="jogging">Jogging</h3>
+
+<p>Jogging is handled directly by the plugin. Keyboard jog (without Shift) uses the plugin's configured velocity. Shift+arrow uses Mach3's computed jog speed. The plugin sends jog commands to the controller as continuous motion with acceleration.</p>
+
+<h3 id="dwell">Dwell</h3>
+
+<p>G4 (dwell) commands are sent to the controller as zero-motion segments with the specified duration.</p>
+
+<h3 id="feed-hold-resume">Feed Hold / Resume</h3>
+
+<p>Feed hold (pressing "Feed Hold" or via G-code) sends a hold command to the controller, which decelerates to a stop. Resume sends a continue command.</p>
+
+<hr>
+
+<h2 id="8-connection-protocol">8. Connection & Protocol</h2>
+
+<h3 id="network-architecture">Network Architecture</h3>
+
+<table>
+  <tr><th>Channel</th><th>Protocol</th><th>Port</th><th>Purpose</th></tr>
+  <tr><td>Control</td><td>TCP</td><td>58429</td><td>Handshake, config, commands</td></tr>
+  <tr><td>Motion</td><td>UDP</td><td>58427</td><td>Motion segments, jog, E-stop, home, I/O (PC to controller)</td></tr>
+  <tr><td>Status</td><td>UDP</td><td>58428</td><td>Status reports (controller to PC, 50ms interval)</td></tr>
+</table>
+
+<h3 id="wifi-vs-ethernet-w5500">WiFi vs Ethernet (W5500)</h3>
+
+<p>The controller supports both WiFi and wired Ethernet via a W5500 SPI Ethernet module (such as the USR-ES1 breakout, available cheaply on Amazon/eBay). <strong>No software configuration is needed</strong> -- the firmware automatically detects the W5500 at power-on. If a W5500 module is wired up and an Ethernet cable is plugged in, the controller uses Ethernet. If no W5500 is detected, WiFi starts as normal.</p>
+
+<p>The plugin does not need to know whether the controller is using WiFi or Ethernet -- it connects by IP address either way.</p>
+
+<p><strong>Default wiring (Tiggy Pro board):</strong></p>
+
+<table>
+  <tr><th>W5500 Module Pin</th><th>Connect to</th><th>Notes</th></tr>
+  <tr><td>3.3V</td><td>ESP32 3V3 pin</td><td>Power supply</td></tr>
+  <tr><td>GND</td><td>ESP32 GND pin</td><td>Ground</td></tr>
+  <tr><td>MOSI</td><td>GPIO 45</td><td>SPI data out</td></tr>
+  <tr><td>MISO</td><td>GPIO 46</td><td>SPI data in</td></tr>
+  <tr><td>SCLK</td><td>GPIO 0</td><td>SPI clock</td></tr>
+  <tr><td>INT</td><td>GPIO 47</td><td>Interrupt</td></tr>
+  <tr><td>CS</td><td>Tie to GND</td><td>Always selected (saves a pin)</td></tr>
+  <tr><td>RST</td><td>Tie to 3.3V</td><td>Always running (saves a pin)</td></tr>
+</table>
+
+<p>Pins can be changed using the Protocol Tester's Pins tab if your hardware uses different GPIOs. See the <a href="https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html#ethernet-setup">Engineering Reference</a> for a full wiring diagram.</p>
+
+<h3 id="usb-serial-g-code-only">USB Serial (G-code Only)</h3>
+
+<p>The USB port on the ESP32 provides a serial connection at 115,200 baud for GRBL-compatible G-code senders (UGS, CNCjs, bCNC, LaserGRBL). This gives you full 6-axis control over USB without needing WiFi or Ethernet. However, the Mach3 plugin and LinuxCNC HAL require WiFi or Ethernet -- they use the binary protocol which is not available over USB.</p>
+
+<h3 id="connection-sequence">Connection Sequence</h3>
+
+<ol>
+  <li>TCP connect to controller</li>
+  <li>Handshake (exchange version, capabilities, buffer size)</li>
+  <li>Sync all configuration to controller (timing, inversion, axis params, homing, spindle, etc.)</li>
+  <li>Start UDP channel</li>
+  <li>Send RESET to clear any stale state</li>
+  <li>Begin normal operation</li>
+
+</ol>
+<h3 id="auto-discovery">Auto-Discovery</h3>
+
+<p>The plugin broadcasts a UDP discovery packet on port 8082. Any controller running the Tiggy firmware will respond with its IP address. Discovery has a 5-second timeout.</p>
+
+<h3 id="reconnection">Reconnection</h3>
+
+<p>If the connection drops, the plugin automatically attempts to reconnect with exponential backoff (1s, 2s, 4s, 8s, 16s, up to 30s maximum).</p>
+
+<hr>
+
+<h2 id="9-registry-settings">9. Registry Settings</h2>
+
+<p>All plugin settings are stored in <code>HKEY_CURRENT_USER\Software\Tiggy</code>. These are loaded on startup and saved when the config dialog is closed with OK.</p>
+
+<table>
+  <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td>ESPAddress</td><td>String</td><td>192.168.4.1</td><td>controller IP address</td></tr>
+  <tr><td>X_Enabled .. C_Enabled</td><td>DWORD</td><td>X/Y/Z=1, A/B/C=0</td><td>Per-axis enable</td></tr>
+  <tr><td>X_StepsPerUnit .. C_StepsPerUnit</td><td>String</td><td>200.0</td><td>Steps per user unit</td></tr>
+  <tr><td>X_VelPerMin .. C_VelPerMin</td><td>String</td><td>1000.0</td><td>Max velocity (units/min)</td></tr>
+  <tr><td>X_Accel .. C_Accel</td><td>String</td><td>100.0</td><td>Acceleration (units/s^2)</td></tr>
+  <tr><td>StepPulseUs</td><td>DWORD</td><td>5</td><td>Step pulse width (us)</td></tr>
+  <tr><td>DirSetupUs</td><td>DWORD</td><td>5</td><td>Dir setup time (us)</td></tr>
+  <tr><td>InvertStep</td><td>DWORD</td><td>0</td><td>Step inversion bitmask</td></tr>
+  <tr><td>InvertDir</td><td>DWORD</td><td>0</td><td>Direction inversion bitmask</td></tr>
+  <tr><td>InvertLimit</td><td>DWORD</td><td>0</td><td>Limit switch inversion bitmask</td></tr>
+  <tr><td>InvertHome</td><td>DWORD</td><td>0</td><td>Home switch inversion bitmask</td></tr>
+  <tr><td>InvertEstop</td><td>DWORD</td><td>0</td><td>E-stop inversion (0 or 1)</td></tr>
+  <tr><td>InvertProbe</td><td>DWORD</td><td>0</td><td>Probe inversion (0 or 1)</td></tr>
+  <tr><td>HomingDirMask</td><td>DWORD</td><td>0</td><td>Homing direction bitmask</td></tr>
+  <tr><td>HomingSeekRate</td><td>DWORD</td><td>500</td><td>Homing seek rate (steps/sec)</td></tr>
+  <tr><td>HomingFeedRate</td><td>DWORD</td><td>50</td><td>Homing feed rate (steps/sec)</td></tr>
+  <tr><td>HomingPulloff</td><td>DWORD</td><td>200</td><td>Homing pulloff (steps)</td></tr>
+  <tr><td>SpindlePwmFreq</td><td>DWORD</td><td>1000</td><td>Spindle PWM frequency (Hz)</td></tr>
+  <tr><td>SpindleMaxRpm</td><td>DWORD</td><td>24000</td><td>Spindle max RPM</td></tr>
+  <tr><td>ChargePumpFreq</td><td>DWORD</td><td>0</td><td>Charge pump frequency (Hz)</td></tr>
+  <tr><td>StepIdleDelayMs</td><td>DWORD</td><td>0</td><td>Step idle delay (ms)</td></tr>
+  <tr><td>LaserMode</td><td>DWORD</td><td>0</td><td>Laser mode (0/1)</td></tr>
+  <tr><td>MiscInputFunc1 .. MiscInputFunc4</td><td>DWORD</td><td>0</td><td>Input function mapping codes</td></tr>
+  <tr><td>BoardName</td><td>String</td><td>Tiggy Standard...</td><td>Selected board profile name</td></tr>
+  <tr><td>IOModuleAddress</td><td>String</td><td>(empty)</td><td>I/O expansion module IP</td></tr>
+  <tr><td>IOModuleEnabled</td><td>DWORD</td><td>0</td><td>Enable I/O module (0/1)</td></tr>
+  <tr><td>IOInputFunc0 .. IOInputFunc15</td><td>DWORD</td><td>0</td><td>I/O module input function codes</td></tr>
+  <tr><td>IOOutputFunc0 .. IOOutputFunc15</td><td>DWORD</td><td>0</td><td>I/O module output function codes</td></tr>
+  <tr><td>IOJogSpeed</td><td>DWORD</td><td>5000</td><td>I/O module jog speed (steps/sec)</td></tr>
+</table>
+
+<hr>
+
+<h2 id="10-debug-log">10. Debug Log</h2>
+
+<p>The plugin writes a debug log to <code>Tiggy_debug.log</code> in the same folder as the DLL (<code>C:\Mach3\PlugIns\Tiggy_debug.log</code>). This log includes:</p>
+
+<ul>
+  <li>Startup/shutdown events</li>
+  <li>Connection attempts and results</li>
+  <li>Handshake details (firmware version, buffer capacity)</li>
+  <li>Configuration sync</li>
+  <li>Spindle/coolant state changes</li>
+  <li>Homing and probing events</li>
+  <li>E-stop transitions</li>
+  <li>Misc output changes</li>
+  <li>Input function mapping triggers</li>
+  <li>Error conditions</li>
+
+</ul>
+<p>The log appends on each Mach3 session (not overwritten).</p>
+
+<hr>
+
+<h2 id="11-troubleshooting">11. Troubleshooting</h2>
+
+<h3 id="dros-show-inf-or-wrong-values-on-startup">DROs show #INF or wrong values on startup</h3>
+
+<p>The plugin writes axis configuration (steps/unit, velocity, acceleration) into Mach3's MainPlanner during <code>piPostInitControl()</code>. If the DROs show incorrect values, open the plugin config dialog and click OK -- this forces a re-apply.</p>
+
+<h3 id="e-stop-triggers-with-nothing-connected">E-stop triggers with nothing connected</h3>
+
+<p>The E-stop GPIO pin may be floating high. Tick the <strong>Inv</strong> checkbox next to E-Stop in the Inputs tab. This inverts the interpretation so an open (unconnected) pin reads as "not triggered".</p>
+
+<h3 id="homing-completes-instantly-without-touching-switches">Homing completes instantly without touching switches</h3>
+
+<p>The firmware thinks the home switches are already triggered. Check the Inputs tab:</p>
+<ul>
+  <li>If home switches show <strong>ON</strong> with nothing connected, tick the corresponding <strong>Home switch inversion</strong> checkboxes</li>
+  <li>The firmware applies home inversion internally, so these checkboxes directly affect the firmware's interpretation during homing</li>
+
+</ul>
+<h3 id="homing-only-moves-one-axis">Homing only moves one axis</h3>
+
+<p>The firmware homes axes sequentially (typically Z first for safety). If axes appear to home instantly, see "Homing completes instantly" above.</p>
+
+<h3 id="cannot-connect-to-controller">Cannot connect to controller</h3>
+
+<ol>
+  <li>Verify the controller is powered and running the Tiggy firmware</li>
+  <li>Check that your PC and controller are on the same network</li>
+  <li>Try the Auto-Discover button in the Connection tab</li>
+  <li>Check the debug log for connection error details</li>
+  <li>Try the default AP IP: <code>192.168.4.1</code></li>
+
+</ol>
+<h3 id="limit-switches-not-working">Limit switches not working</h3>
+
+<p>The plugin enables limit switch signals for all enabled axes. If limits don't trigger:</p>
+<ol>
+  <li>Check the Inputs tab live display - does the switch show ON when physically pressed?</li>
+  <li>If it shows the wrong state, tick the Inv checkbox for that axis</li>
+  <li>Verify the limit GPIO is correctly wired to the pin shown in the Pin Map tab</li>
+
+</ol>
+<h3 id="input-function-buttons-don-t-trigger">Input function buttons don't trigger</h3>
+
+<ol>
+  <li>Verify the board has misc input GPIOs assigned (check Pin Map tab - Tiggy Standard has none)</li>
+  <li>Check the Inputs tab live display to confirm the input state changes when you press the button</li>
+  <li>Ensure a function is selected in the dropdown (not "None")</li>
+  <li>The plugin only triggers on <strong>rising edge</strong> (button press, not release or hold)</li>
+
+</ol>
+<h3 id="plugin-dll-locked-cannot-update">Plugin DLL locked / cannot update</h3>
+
+<p>Close Mach3 completely before copying a new <code>Tiggy.dll</code> to the PlugIns folder. Mach3 loads the DLL at startup and holds it open.</p>
+
+<hr>
+
+<h2 id="12-firmware-compatibility">12. Firmware Compatibility</h2>
+
+<p>The plugin communicates using the Tiggy Protocol (defined in <code>wifi_cnc_protocol.h</code>). The firmware is considered frozen -- all feature additions and changes are made on the plugin side.</p>
+
+<h3 id="protocol-version">Protocol Version</h3>
+
+<p>The handshake exchange includes firmware version information. The plugin logs this at connection time:</p>
+
+<pre>
+Handshake OK! FW v1.0.0, 6 axes, buffer=128, maxRate=200000
+</pre>
+
+<h3 id="configuration-keys-sent-to-controller">Configuration Keys Sent to controller</h3>
+
+<p>On connection (and when settings change), the plugin sends:</p>
+
+<table>
+  <tr><th>Config Key</th><th>Value</th></tr>
+  <tr><td>Step pulse width</td><td><code>WCNC_CFG_STEP_PULSE_US</code></td></tr>
+  <tr><td>Dir setup time</td><td><code>WCNC_CFG_DIR_SETUP_US</code></td></tr>
+  <tr><td>Invert step/dir/limit/home/estop/probe</td><td><code>WCNC_CFG_INVERT_*</code></td></tr>
+  <tr><td>Per-axis max rate</td><td><code>WCNC_CFG_MAX_RATE_X</code> + axis</td></tr>
+  <tr><td>Per-axis acceleration</td><td><code>WCNC_CFG_ACCEL_X</code> + axis</td></tr>
+  <tr><td>Per-axis steps/unit</td><td><code>WCNC_CFG_STEPS_PER_MM_X</code> + axis</td></tr>
+  <tr><td>Homing parameters</td><td><code>WCNC_CFG_HOMING_*</code></td></tr>
+  <tr><td>Spindle PWM freq/max RPM</td><td><code>WCNC_CFG_SPINDLE_*</code></td></tr>
+  <tr><td>Charge pump frequency</td><td><code>WCNC_CFG_CHARGE_PUMP_FREQ</code></td></tr>
+  <tr><td>Step idle delay</td><td><code>WCNC_CFG_STEP_IDLE_DELAY_MS</code></td></tr>
+</table>
+
+</main>
+
+</body>
+</html>

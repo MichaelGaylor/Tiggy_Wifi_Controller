@@ -95,8 +95,8 @@ Mach3 / LinuxCNC / Serial Terminal
 
 ## Documentation
 
-- [User Manual](Tiggy_Plugin_Manual.md) -- full plugin configuration guide
-- [Engineering Reference](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html) -- protocol and internals
+- [User Manual](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/plugin_manual.html) -- full plugin configuration guide ([markdown](Tiggy_Plugin_Manual.md))
+- [Engineering Reference](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html) -- protocol, wiring diagrams, and internals
 
 ## License
 
