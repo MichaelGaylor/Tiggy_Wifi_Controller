@@ -57,6 +57,8 @@ from protocol_test import (
     CFG_DEVICE_MODE,
     CFG_IO_PIN_COUNT, CFG_IO_DIR_MASK, CFG_IO_PULLUP_MASK, CFG_IO_INVERT_MASK,
     CFG_IO_PIN_BASE,
+    CFG_PIN_ETH_MOSI, CFG_PIN_ETH_MISO, CFG_PIN_ETH_SCLK,
+    CFG_PIN_ETH_INT, CFG_PIN_ETH_SPI_HOST,
     VAL_UINT8, VAL_UINT16, VAL_UINT32, VAL_FLOAT,
     STATES, MAX_AXES, CONFIG_VALUE_LEN,
     crc16_ccitt, build_header, finalize_packet, validate_packet,
@@ -98,6 +100,11 @@ PIN_SINGLE_KEYS = [
     ("Encoder A",   CFG_PIN_ENCODER_A),
     ("Encoder B",   CFG_PIN_ENCODER_B),
     ("Encoder Idx", CFG_PIN_ENCODER_INDEX),
+    ("Eth MOSI",    CFG_PIN_ETH_MOSI),
+    ("Eth MISO",    CFG_PIN_ETH_MISO),
+    ("Eth SCLK",    CFG_PIN_ETH_SCLK),
+    ("Eth INT",     CFG_PIN_ETH_INT),
+    ("Eth SPI#",    CFG_PIN_ETH_SPI_HOST),
 ]
 
 
@@ -646,6 +653,19 @@ class WiFiCNCTester:
         ttk.Entry(iomod_r2, textvariable=self.io_inv_var, width=6,
                   font=("Consolas", 10)).pack(side="left", padx=(2, 10))
 
+        # I/O Module Pin Assignments (GPIO for each channel)
+        iomod_pins_frame = ttk.Frame(iomod_cfg_frame, style="TFrame")
+        iomod_pins_frame.pack(fill="x", **pad)
+        ttk.Label(iomod_pins_frame, text="Channel GPIO pins:", style="TLabel").pack(side="left")
+        self.io_pin_vars = []
+        for ch in range(16):
+            var = tk.StringVar(value="255")
+            ttk.Entry(iomod_pins_frame, textvariable=var, width=3,
+                      font=("Consolas", 9)).pack(side="left", padx=1)
+            self.io_pin_vars.append(var)
+        ttk.Label(iomod_pins_frame, text="(255=unused)",
+                  style="TLabel", foreground="#888888").pack(side="left", padx=4)
+
         iomod_btns = ttk.Frame(iomod_cfg_frame, style="TFrame")
         iomod_btns.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(iomod_btns, text="Read I/O Module",
@@ -907,14 +927,12 @@ class WiFiCNCTester:
         s_row2.pack(fill="x", **pad)
         s_row3 = ttk.Frame(single_frame, style="TFrame")
         s_row3.pack(fill="x", **pad)
+        s_row4 = ttk.Frame(single_frame, style="TFrame")
+        s_row4.pack(fill="x", **pad)
 
+        pin_rows = [s_row1, s_row2, s_row3, s_row4]
         for i, (label, key) in enumerate(PIN_SINGLE_KEYS):
-            if i < 5:
-                row = s_row1
-            elif i < 10:
-                row = s_row2
-            else:
-                row = s_row3
+            row = pin_rows[i // 5]
             ttk.Label(row, text=f"{label}:", style="TLabel").pack(side="left")
             var = tk.StringVar(value="0")
             ttk.Entry(row, textvariable=var, width=4,
@@ -1807,7 +1825,12 @@ class WiFiCNCTester:
                 if vtype is not None:
                     val = struct.unpack_from('<H', bytes(vdata))[0]
                     self.root.after(0, self.io_inv_var.set, f"{val:04X}")
-            self.root.after(0, self._log, "I/O module config read", "success")
+                # Per-channel pin assignments (uint8 each)
+                for ch in range(16):
+                    vtype, vdata = send_config_get(self.tcp_sock, CFG_IO_PIN_BASE + ch)
+                    if vtype is not None:
+                        self.root.after(0, self.io_pin_vars[ch].set, str(vdata[0]))
+            self.root.after(0, self._log, "I/O module config read (21 keys)", "success")
         except Exception as e:
             self.root.after(0, self._log, f"I/O module read error: {e}", "error")
 
@@ -1840,6 +1863,13 @@ class WiFiCNCTester:
                 if not send_config_set(self.tcp_sock, CFG_IO_INVERT_MASK, inv_mask, VAL_UINT16):
                     self.root.after(0, self._log, "Failed to set I/O invert mask", "error")
                     return
+                # Per-channel pin assignments
+                for ch in range(16):
+                    val = int(self.io_pin_vars[ch].get())
+                    if not send_config_set(self.tcp_sock, CFG_IO_PIN_BASE + ch, val, VAL_UINT8):
+                        self.root.after(0, self._log,
+                                       f"Failed to set I/O pin {ch}", "error")
+                        return
                 if send_config_save(self.tcp_sock):
                     self.root.after(0, self._log,
                                     "I/O module config saved (reboot to apply)", "success")
