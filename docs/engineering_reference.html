@@ -652,8 +652,9 @@ if (st.max_rate[i] &gt; CFG_MAX_AGGREGATE_STEP_RATE)
 </p>
 
 <div class="warning">
-  <strong>Note:</strong> Ethernet uses GPIO 47, which was previously Misc Input 2. If you need
-  all 4 misc inputs and don&rsquo;t want Ethernet, you can reassign GPIO 47 back to Misc Input 2
+  <strong>Note:</strong> Ethernet uses GPIO 47, which was previously Misc Input 2 (reducing the
+  Pro board from 4 to 3 misc inputs). If you don&rsquo;t need Ethernet, you can reassign GPIO 47
+  back to Misc Input 2
   in the Protocol Tester Pins tab. The Tiggy Standard board (S3-Zero) is not affected &mdash; it has
   no Ethernet support and keeps its original pin assignments.
 </div>

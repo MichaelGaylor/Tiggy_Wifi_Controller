@@ -25,7 +25,7 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 | Board | MCU | Wired Axes | Misc Inputs |
 |-------|-----|------------|-------------|
 | Tiggy Standard board (ESP32-S3-Zero) | Waveshare ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | 0 |
-| Tiggy Pro board (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 4 |
+| Tiggy Pro board (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 3 |
 | Classic board (ESP32-WROOM-32) | ESP32-WROOM-32 DevKit | 6 (limited I/O) | 0 |
 
 **Mach3 Plugin Licensing:** The Free tier supports 3 axes (X/Y/Z). The Pro Mach3 license unlocks 6 axes, I/O expansion module, and spindle encoder threading. Note: the ESP32 firmware is open source and supports all 6 axes with no restrictions. If you use LinuxCNC, GRBL senders, or any other host software, all 6 axes work for free. The 3-axis limit applies **only** to the Mach3 plugin. Download from [www.tiggyengineering.com](https://www.tiggyengineering.com).
