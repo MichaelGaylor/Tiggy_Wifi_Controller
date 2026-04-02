@@ -14,6 +14,7 @@ idf_component_register(
         "motion/motion_control.c"
         "motion/planner.c"
         "network/wifi_manager.c"
+        "network/eth_manager.c"
         "network/udp_server.c"
         "network/tcp_server.c"
         "network/protocol_handler.c"
@@ -41,5 +42,5 @@ idf_component_register(
         "gcode"
         "../../protocol"
     REQUIRES
-        driver esp_driver_pcnt esp_wifi esp_event nvs_flash esp_timer lwip esp_netif
+        driver esp_driver_pcnt esp_wifi esp_eth esp_event nvs_flash esp_timer lwip esp_netif
 )

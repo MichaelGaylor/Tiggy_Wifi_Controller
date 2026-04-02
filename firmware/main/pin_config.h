@@ -97,6 +97,9 @@
 #define PIN_ENCODER_B       GPIO_NUM_16
 #define PIN_ENCODER_INDEX   GPIO_NUM_17
 
+/* No Ethernet on Standard board (limited GPIO) */
+#define HAS_ETHERNET        0
+
 #endif /* BOARD_ESP32S3_ZERO */
 
 /* ===================================================================
@@ -161,11 +164,10 @@
 #define MISC_OUTPUT_COUNT   2
 #define PIN_MISC_OUT_0      GPIO_NUM_11
 #define PIN_MISC_OUT_1      GPIO_NUM_12
-#define MISC_INPUT_COUNT    4
+#define MISC_INPUT_COUNT    3           /* Was 4, GPIO 47 reassigned to Ethernet INT */
 #define PIN_MISC_IN_0       GPIO_NUM_18
 #define PIN_MISC_IN_1       GPIO_NUM_21
-#define PIN_MISC_IN_2       GPIO_NUM_47
-#define PIN_MISC_IN_3       GPIO_NUM_32    /* Was 33, moved for N16R8 PSRAM */
+#define PIN_MISC_IN_2       GPIO_NUM_32    /* Was GPIO 47/33, moved for Ethernet + PSRAM */
 
 /* Spindle encoder (optional, configurable via NVS) */
 #define PIN_ENCODER_A       GPIO_NUM_26
@@ -175,12 +177,16 @@
 /* ESP32-S3 has internal pull-ups on all GPIOs */
 #define LIMIT_PINS_NEED_EXTERNAL_PULLUP  0
 
-/* Reserved for future W5500 Ethernet (Pro board only):
- * Needs 5 GPIO for SPI (MISO, MOSI, SCLK, CS, INT).
- * With 6-axis defaults using GPIO 29-32, W5500 requires NVS pin
- * overrides. Spares: GPIO 0, 45, 46 (3 pins, need 2 more via NVS).
- * Alternatively use N8R2 module (no Octal SPI) to reclaim GPIO 33-37.
- * W5500 RESET can be tied to 3.3V (active-high enable) — no GPIO needed */
+/* W5500 Ethernet (optional, Pro board only)
+ * Uses 4 GPIO pins (CS tied to GND, RESET tied to 3.3V — no GPIO needed).
+ * Default: MOSI=45, MISO=46, SCLK=0, INT=47 (reassigned from MISC_IN_2).
+ * All pins configurable via saved settings (Protocol Tester Pins tab). */
+#define HAS_ETHERNET        1
+#define PIN_ETH_MOSI        GPIO_NUM_45
+#define PIN_ETH_MISO        GPIO_NUM_46
+#define PIN_ETH_SCLK        GPIO_NUM_0
+#define PIN_ETH_INT         GPIO_NUM_47     /* Was MISC_IN_2 — reassigned for Ethernet */
+#define PIN_ETH_SPI_HOST    3           /* SPI3_HOST */
 
 #endif /* BOARD_ESP32S3_DEVKITC */
 
@@ -237,6 +243,9 @@
 #define PIN_ENCODER_A       GPIO_NUM_NC
 #define PIN_ENCODER_B       GPIO_NUM_NC
 #define PIN_ENCODER_INDEX   GPIO_NUM_NC
+
+/* No Ethernet on Classic board (limited GPIO) */
+#define HAS_ETHERNET        0
 
 #endif /* BOARD_ESP32_WROOM32 */
 

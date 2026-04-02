@@ -171,9 +171,8 @@ void wifi_manager_init(void)
 {
     s_wifi_event_group = xEventGroupCreate();
 
-    /* Initialize TCP/IP stack */
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    /* Note: esp_netif_init() and esp_event_loop_create_default() are called
+     * once in main.c before either Ethernet or WiFi manager is initialized. */
 
     s_sta_netif = esp_netif_create_default_wifi_sta();
     s_ap_netif = esp_netif_create_default_wifi_ap();

@@ -44,6 +44,8 @@
 #define CFG_WIFI_RECONNECT_MAX_MS       5000    /* Max reconnect delay */
 #define CFG_WIFI_STA_TIMEOUT_MS         10000   /* STA mode timeout before AP fallback */
 
+#define CFG_ETH_TIMEOUT_MS              5000    /* W5500 detection + DHCP timeout */
+
 #define CFG_AP_SSID_PREFIX              "WiFiCNC-"
 #define CFG_AP_DEFAULT_PASSWORD         "12345678"
 #define CFG_AP_CHANNEL                  1

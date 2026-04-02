@@ -263,6 +263,13 @@ typedef enum {
     WCNC_CFG_IO_INVERT_MASK     = 0x0613,  /* uint16: 1=invert per channel */
     /* I/O module pin GPIO assignments: 0x0620..0x062F (up to 16 channels) */
     WCNC_CFG_IO_PIN_BASE        = 0x0620,  /* uint8: GPIO for I/O channel 0 */
+
+    /* Ethernet (W5500 SPI) pin configuration */
+    WCNC_CFG_PIN_ETH_MOSI       = 0x0700,  /* uint8: SPI MOSI GPIO */
+    WCNC_CFG_PIN_ETH_MISO       = 0x0701,  /* uint8: SPI MISO GPIO */
+    WCNC_CFG_PIN_ETH_SCLK       = 0x0702,  /* uint8: SPI clock GPIO */
+    WCNC_CFG_PIN_ETH_INT        = 0x0703,  /* uint8: interrupt GPIO */
+    WCNC_CFG_PIN_ETH_SPI_HOST   = 0x0704,  /* uint8: SPI host (2=SPI2, 3=SPI3) */
 } wcnc_config_key_t;
 
 /* Configuration value types */

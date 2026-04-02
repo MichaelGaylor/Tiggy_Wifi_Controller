@@ -13,6 +13,8 @@
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#include "esp_event.h"
+#include "esp_netif.h"
 #include "nvs_flash.h"
 
 #include "config.h"
@@ -21,6 +23,7 @@
 #include "motion/stepper.h"
 #include "motion/motion_control.h"
 #include "network/wifi_manager.h"
+#include "network/eth_manager.h"
 #include "network/udp_server.h"
 #include "network/tcp_server.h"
 #include "io/gpio_control.h"
@@ -81,9 +84,18 @@ void app_main(void)
         ESP_LOGI(TAG, "Spindle encoder initialized");
     }
 
-    /* 6. Initialize WiFi (handles STA connect or AP fallback) */
-    wifi_manager_init();
-    ESP_LOGI(TAG, "WiFi manager started");
+    /* 6. Initialize TCP/IP stack (shared by Ethernet and WiFi) */
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    /* 7. Try Ethernet first (W5500 SPI), fall back to WiFi if not available */
+    bool eth_ok = eth_manager_init();
+    if (eth_ok) {
+        ESP_LOGI(TAG, "Ethernet connected - WiFi disabled");
+    } else {
+        wifi_manager_init();
+        ESP_LOGI(TAG, "WiFi manager started");
+    }
 
     /* 7. Create network tasks on Core 0 */
     xTaskCreatePinnedToCore(

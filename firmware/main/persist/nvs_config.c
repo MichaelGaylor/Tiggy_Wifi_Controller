@@ -212,6 +212,12 @@ static const char *protocol_key_to_nvs(uint16_t key)
     case WCNC_CFG_IO_DIR_MASK:     return "io_dir";
     case WCNC_CFG_IO_PULLUP_MASK:  return "io_pull";
     case WCNC_CFG_IO_INVERT_MASK:  return "io_inv";
+    /* Ethernet (W5500 SPI) */
+    case WCNC_CFG_PIN_ETH_MOSI:    return "p_emosi";
+    case WCNC_CFG_PIN_ETH_MISO:    return "p_emiso";
+    case WCNC_CFG_PIN_ETH_SCLK:    return "p_esclk";
+    case WCNC_CFG_PIN_ETH_INT:     return "p_eint";
+    case WCNC_CFG_PIN_ETH_SPI_HOST: return "p_espi";
     default:
         /* I/O module pin assignments: 0x0620..0x062F */
         if (key >= WCNC_CFG_IO_PIN_BASE && key < WCNC_CFG_IO_PIN_BASE + 16) {
@@ -270,6 +276,9 @@ static uint16_t protocol_key_value_type(uint16_t key)
         return WCNC_VAL_UINT16;
     /* I/O module pin assignments */
     if (key >= WCNC_CFG_IO_PIN_BASE && key < WCNC_CFG_IO_PIN_BASE + 16)
+        return WCNC_VAL_UINT8;
+    /* Ethernet pin config */
+    if (key >= WCNC_CFG_PIN_ETH_MOSI && key <= WCNC_CFG_PIN_ETH_SPI_HOST)
         return WCNC_VAL_UINT8;
 
     return WCNC_VAL_UINT32;
@@ -361,6 +370,14 @@ static uint8_t protocol_key_default_u8(uint16_t key)
 #endif
 #if MISC_INPUT_COUNT > 3
     if (key == WCNC_CFG_PIN_MISC_IN3)     return (uint8_t)PIN_MISC_IN_3;
+#endif
+    /* Ethernet pin defaults */
+#if HAS_ETHERNET
+    if (key == WCNC_CFG_PIN_ETH_MOSI)     return (uint8_t)PIN_ETH_MOSI;
+    if (key == WCNC_CFG_PIN_ETH_MISO)     return (uint8_t)PIN_ETH_MISO;
+    if (key == WCNC_CFG_PIN_ETH_SCLK)     return (uint8_t)PIN_ETH_SCLK;
+    if (key == WCNC_CFG_PIN_ETH_INT)      return (uint8_t)PIN_ETH_INT;
+    if (key == WCNC_CFG_PIN_ETH_SPI_HOST) return (uint8_t)PIN_ETH_SPI_HOST;
 #endif
     /* Device mode + I/O module defaults */
     if (key == WCNC_CFG_DEVICE_MODE)       return 0;  /* motion controller */
