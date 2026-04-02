@@ -6,7 +6,7 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 
 **Key features:**
 
-- Up to 6 axes (X, Y, Z, A, B, C) with independent step/direction control
+- Up to 6 axes (X, Y, Z, A, B, C) with independent step/direction control -- Pro Mach3 license required for A/B/C axes; Free tier supports X/Y/Z
 - Axis configuration (steps/unit, velocity, accel) in the plugin dialog
 - Signal inversion configured in the plugin's own settings dialog
 - Real-time position feedback and DRO display
@@ -22,11 +22,13 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 
 **Supported boards:**
 
-| Board | MCU | Axes | Misc Inputs |
-|-------|-----|------|-------------|
-| Tiggy Standard (ESP32-S3-Zero) | Waveshare ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | 0 |
-| Tiggy Pro (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 4 |
-| Classic (ESP32-WROOM-32) | ESP32-WROOM-32 DevKit | 6 (limited I/O) | 0 |
+| Board | MCU | Wired Axes | Misc Inputs |
+|-------|-----|------------|-------------|
+| Tiggy Standard board (ESP32-S3-Zero) | Waveshare ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | 0 |
+| Tiggy Pro board (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 4 |
+| Classic board (ESP32-WROOM-32) | ESP32-WROOM-32 DevKit | 6 (limited I/O) | 0 |
+
+**Mach3 Plugin Licensing:** The Free tier supports 3 axes (X/Y/Z). The Pro Mach3 license unlocks 6 axes, I/O expansion module, and spindle encoder threading. Note: the ESP32 firmware is open source and supports all 6 axes with no restrictions. If you use LinuxCNC, GRBL senders, or any other host software, all 6 axes work for free. The 3-axis limit applies **only** to the Mach3 plugin. Download from [www.tiggyengineering.com](https://www.tiggyengineering.com).
 
 ---
 
@@ -91,7 +93,7 @@ Replaces Mach3's Motor Tuning panel. The plugin owns all motion parameters.
 | Velocity (u/min) | Maximum velocity in user units per minute |
 | Accel (u/s^2) | Acceleration in user units per second squared |
 
-**All 6 axes** (X, Y, Z, A, B, C) are listed. Only enable the axes your machine physically has.
+**All 6 axes** (X, Y, Z, A, B, C) are listed. Only enable the axes your machine physically has. Axes A, B, and C require a Pro Mach3 license.
 
 These values are written into Mach3's internal MainPlanner structure so that DRO display works correctly. You do **not** need to configure Motor Tuning in Mach3 separately.
 
@@ -147,6 +149,7 @@ Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each
 - Input 4 = Reset (wire a momentary "Reset" button to Misc In 4)
 
 **Note:** The Tiggy Standard board has no misc input GPIOs assigned (all show `n/a` in Pin Map). The Tiggy Pro board has 4 misc inputs on GPIO 18, 21, 47, and 33.
+
 
 ### Tab 4: Advanced
 
@@ -387,7 +390,7 @@ Five general-purpose digital outputs controlled via Mach3's external activation 
 - **M64/M65** (immediate): The output changes instantly when the M-code is executed, even if motion is still in progress from a previous line.
 - **M62/M63** (motion-synced): The macro waits for all queued motion to complete before changing the output. Use these when timing matters (e.g. activating a clamp after a move completes).
 
-**Hardware availability:** The Tiggy Standard has 2 misc output GPIOs (Output #1 on GPIO 11, Output #2 on GPIO 12). The Tiggy Pro also has 2 misc output GPIOs. Outputs #3-#5 are reserved for future expansion.
+**Hardware availability:** The Tiggy Standard board has 2 misc output GPIOs (Output #1 on GPIO 11, Output #2 on GPIO 12). The Tiggy Pro board also has 2 misc output GPIOs. Outputs #3-#5 are reserved for future expansion.
 
 ### M-Code Macros (Required)
 
@@ -511,8 +514,9 @@ Feed hold (pressing "Feed Hold" or via G-code) sends a hold command to the contr
 
 | Channel | Protocol | Port | Purpose |
 |---------|----------|------|---------|
-| Control | TCP | 8080 | Handshake, config, commands |
-| Real-time | UDP | 8081 | Motion packets, status reports, jog/home commands |
+| Control | TCP | 58429 | Handshake, config, commands |
+| Motion | UDP | 58427 | Motion segments, jog, E-stop, home, I/O (PC to controller) |
+| Status | UDP | 58428 | Status reports (controller to PC, 50ms interval) |
 
 ### WiFi vs Ethernet (W5500)
 

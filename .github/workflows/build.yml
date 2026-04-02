@@ -15,9 +15,9 @@ jobs:
       matrix:
         include:
           - board: esp32s3-devkitc
-            label: "6-axis DevKitC N16R8"
+            label: "Tiggy Pro board (DevKitC N16R8)"
           - board: esp32s3-zero
-            label: "3-axis S3-Zero"
+            label: "Tiggy Standard board (S3-Zero)"
     steps:
       - uses: actions/checkout@v4
 

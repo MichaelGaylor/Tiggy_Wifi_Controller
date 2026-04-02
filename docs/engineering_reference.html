@@ -162,6 +162,11 @@
   <strong>binary protocol</strong> (Mach3 plugin / LinuxCNC HAL) and <strong>GRBL-compatible G-code interpreter</strong>
   (any standard sender over WiFi telnet or USB serial).
 </p>
+<div class="info">
+  <strong>Note:</strong> This document covers the open-source ESP32 firmware. The Mach3 plugin is referenced
+  where it interacts with the firmware protocol, but plugin source code is not part of this repository.
+  All 6 axes are free and open source &mdash; the firmware has no licensing restrictions.
+</div>
 
 <h2 id="architecture">System Architecture</h2>
 
@@ -241,7 +246,7 @@
 
 <h2 id="files">File Map</h2>
 <div class="file-tree">
-<span class="dir">Mach3_Controller/</span>
+<span class="dir">Tiggy_Wifi_Controller/</span>
   <span class="dir">firmware/</span>
     platformio.ini                   &mdash; PlatformIO config + board define (pio builds)
     CMakeLists.txt                   &mdash; Top-level ESP-IDF project file
@@ -277,7 +282,7 @@
   <span class="dir">protocol/</span>
     <span class="mod">wifi_cnc_protocol.h</span>              &mdash; Shared packet definitions, CRC, pin config keys
   <span class="dir">plugin/</span>
-    WiFiCNC/                         &mdash; Mach3 DLL plugin (Windows)
+    WiFiCNC/                         &mdash; Mach3 plugin (distributed separately; see <a href="https://www.tiggyengineering.com">www.tiggyengineering.com</a>)
   <span class="dir">linuxcnc/</span>
     wificnc-hal.c/.h                 &mdash; LinuxCNC HAL component
   <span class="dir">tools/</span>
@@ -1024,9 +1029,8 @@ typedef struct {
   <tr><td colspan="3" style="color: var(--fg2);"><em>P parameter is 0-indexed: P0=Misc1, P1=Misc2, P2=Misc3, P3=Misc4, P4=Misc5</em></td></tr>
 </table>
 <p>
-  <strong>Plugin paths:</strong> M62/M63 &rarr; trajectory buffer &rarr; <code>COMEXT1ON/OFF</code> &rarr; <code>HandleTrajCommand()</code>
-  &rarr; <code>SendIOControl()</code>. M64/M65 &rarr; <code>Engine-&gt;OutSigs[EXTACT1..5]</code> &rarr; Phase&nbsp;11b polling
-  &rarr; <code>SendIOControl()</code>.
+  M62/M63 are synchronized with motion (queued in the trajectory buffer). M64/M65 take effect immediately.
+  Both result in an I/O control packet being sent to the controller firmware.
 </p>
 
 <h3>Status Report Extended Fields (v1.1)</h3>

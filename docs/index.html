@@ -129,14 +129,15 @@
             <h2>1. Select Your Board</h2>
             <div class="board-select">
                 <div class="board-option selected" onclick="selectBoard(this, 'esp32s3-devkitc')" id="board-devkitc">
-                    <h3>Tiggy Pro &mdash; ESP32-S3-DevKitC-1</h3>
-                    <p><span class="axes">6-axis</span> (X/Y/Z/A/B/C) &bull; 16MB Flash &bull; 8MB PSRAM &bull; Full I/O</p>
+                    <h3>Tiggy Pro Board &mdash; ESP32-S3-DevKitC-1</h3>
+                    <p><span class="axes">6 wired axes</span> (X/Y/Z/A/B/C) &bull; 16MB Flash &bull; 8MB PSRAM &bull; Full I/O</p>
                 </div>
                 <div class="board-option" onclick="selectBoard(this, 'esp32s3-zero')" id="board-zero">
-                    <h3>Tiggy Standard &mdash; ESP32-S3-Zero</h3>
-                    <p><span class="axes">3-axis</span> (X/Y/Z) &bull; 4MB Flash &bull; Compact form factor</p>
+                    <h3>Tiggy Standard Board &mdash; ESP32-S3-Zero</h3>
+                    <p><span class="axes">3 wired axes</span> (X/Y/Z) &bull; 4MB Flash &bull; Compact form factor</p>
                 </div>
             </div>
+            <p style="font-size: 13px; color: #a0a0a0; margin-top: 12px;">Both boards run the same 6-axis firmware. The axis count above refers to physically wired step/direction pairs.</p>
         </div>
 
         <div class="card">
@@ -182,6 +183,9 @@
             <h3>LinuxCNC (Linux)</h3>
             <p>Download the <a href="https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz">LinuxCNC installer</a>
                and run <code>./install.sh</code></p>
+
+            <h3>Documentation</h3>
+            <p>See the <a href="engineering_reference.html">Engineering Reference</a> for protocol details, pin configuration, and GRBL command reference.</p>
         </div>
     </div>
 

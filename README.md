@@ -1,8 +1,8 @@
 # Tiggy WiFi CNC Motion Controller
 
-Open-source ESP32 CNC motion controller firmware with LinuxCNC support.
+Open-source ESP32 **6-axis** CNC motion controller firmware with LinuxCNC and GRBL support. Free and fully functional for all 6 axes with LinuxCNC, GRBL senders, or any G-code host. Mach3 support available separately.
 
-Replaces parallel port drivers with a WiFi or Ethernet-connected motion controller supporting up to 6 axes, spindle encoder feedback, and expanded I/O. Works standalone (GRBL-compatible serial/telnet), with LinuxCNC, or with Mach3 (plugin sold separately).
+Replaces parallel port drivers with a WiFi or Ethernet-connected motion controller supporting up to 6 axes, spindle encoder feedback, and expanded I/O. Works standalone (GRBL-compatible serial/telnet), with LinuxCNC, or with Mach3 (plugin sold separately). **All 6 axes are free and open source** -- the only limitation is in the Mach3 plugin, which requires a Pro Mach3 license for axes 4-6.
 
 ## Downloads
 
@@ -30,11 +30,13 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 
 ## Supported Hardware
 
-| Board | MCU | Axes | Notes |
-|-------|-----|------|-------|
-| Tiggy Standard | ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | Compact, Quad SPI PSRAM |
-| Tiggy Pro | ESP32-S3-DevKitC-1 (N16R8) | 6 (X/Y/Z/A/B/C) | Full I/O, Octal SPI PSRAM |
-| Classic | ESP32-WROOM-32 | 6 (limited I/O) | Legacy support |
+| Board | MCU | Wired Axes | Notes |
+|-------|-----|------------|-------|
+| Tiggy Standard board | ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | Compact, Quad SPI PSRAM |
+| Tiggy Pro board | ESP32-S3-DevKitC-1 (N16R8) | 6 (X/Y/Z/A/B/C) | Full I/O, Octal SPI PSRAM |
+| Classic board | ESP32-WROOM-32 | 6 (limited I/O) | Legacy support |
+
+All boards run the same 6-axis firmware. "Wired Axes" refers to the number of step/dir GPIO pairs physically routed on the board. The firmware supports 6 axes regardless of board -- unused axes simply have no GPIO assigned.
 
 ## Quick Start
 
@@ -46,8 +48,8 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 
 ```bash
 cd firmware
-pio run -e esp32s3-devkitc -t upload    # 6-axis DevKitC
-pio run -e esp32s3-zero -t upload       # 3-axis S3-Zero
+pio run -e esp32s3-devkitc -t upload    # Tiggy Pro board (6 wired axes)
+pio run -e esp32s3-zero -t upload       # Tiggy Standard board (3 wired axes)
 ```
 
 ### LinuxCNC
@@ -72,31 +74,31 @@ Download the Mach3 plugin from [www.tiggyengineering.com](https://www.tiggyengin
 3. Config > Select Motion Device > Tiggy Motion Controller
 4. Restart Mach3
 
-**Free tier**: 3 axes (X/Y/Z). **Pro license**: 6 axes, I/O module, threading.
+**Free tier**: 3 axes (X/Y/Z). **Pro Mach3 license**: 6 axes, I/O expansion module, spindle encoder threading. Note: this axis limit applies **only to the Mach3 plugin**. LinuxCNC, GRBL senders, and all other host software get full 6-axis support for free.
 
 ## Architecture
 
 ```
 Mach3 / LinuxCNC / Serial Terminal
               |
-         [TCP:8080 + UDP:8081]
+         [TCP:58429 + UDP:58427/58428]
               |
         ESP32-S3 Firmware (this repo)
               |
         Step/Dir/Enable/Spindle/IO GPIO
 ```
 
-- **TCP** (port 8080): Handshake, configuration, commands
-- **UDP** (port 8081): Real-time motion packets and status reports
+- **TCP** (port 58429): Handshake, configuration, commands
+- **UDP** (port 58427/58428): Real-time motion packets and status reports
 - **Protocol**: Defined in `protocol/wifi_cnc_protocol.h`
 
 ## Documentation
 
 - [User Manual](Tiggy_Plugin_Manual.md) -- full plugin configuration guide
-- [Engineering Reference](docs/engineering_reference.html) -- protocol and internals
+- [Engineering Reference](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/engineering_reference.html) -- protocol and internals
 
 ## License
 
 MIT License -- see [LICENSE](LICENSE)
 
-The ESP32 firmware, LinuxCNC HAL component, protocol definition, and tools are all open source. The Mach3 plugin is distributed separately.
+The ESP32 firmware, LinuxCNC HAL component, protocol definition, and tools are all open source and provide **full 6-axis support at no cost**. The Mach3 plugin is distributed separately -- its Free tier supports 3 axes; a Pro Mach3 license unlocks all 6 axes and additional features.
