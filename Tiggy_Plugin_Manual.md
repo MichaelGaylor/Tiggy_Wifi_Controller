@@ -684,7 +684,7 @@ Close Mach3 completely before copying a new `Tiggy.dll` to the PlugIns folder. M
 
 ## 12. Firmware Compatibility
 
-The plugin communicates using the Tiggy Protocol (defined in `wifi_cnc_protocol.h`). The firmware is considered frozen -- all feature additions and changes are made on the plugin side.
+The plugin communicates using the Tiggy Protocol (defined in `wifi_cnc_protocol.h`). Both the firmware and plugin must use the same version of this file.
 
 ### Protocol Version
 
