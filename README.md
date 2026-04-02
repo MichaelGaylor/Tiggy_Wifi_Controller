@@ -11,6 +11,7 @@ Replaces parallel port drivers with a WiFi or Ethernet-connected motion controll
 | **ESP32 Firmware** | [Flash from browser](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/) | One-click web flasher (Chrome/Edge) |
 | **LinuxCNC** | [Tiggy-LinuxCNC.tar.gz](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz) | HAL component + interactive installer |
 | **Mach3 Plugin** | [www.tiggyengineering.com](https://www.tiggyengineering.com) | Windows plugin (free: 3-axis, Pro: 6-axis) |
+| **Protocol Tester** | [TiggyProtocolTester.exe](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/TiggyProtocolTester.exe) | Windows GUI for testing and configuring |
 
 Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 

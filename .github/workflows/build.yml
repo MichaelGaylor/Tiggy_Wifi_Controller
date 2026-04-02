@@ -73,9 +73,35 @@ jobs:
           name: Tiggy-LinuxCNC
           path: linuxcnc-package/
 
+  build-gui:
+    name: Build Protocol Tester GUI (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build .exe
+        run: |
+          cd tools
+          pyinstaller --onefile --noconsole --name TiggyProtocolTester protocol_test_gui.py
+        shell: bash
+
+      - name: Upload .exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: TiggyProtocolTester
+          path: tools/dist/TiggyProtocolTester.exe
+
   release:
     name: Create Release
-    needs: [build-firmware, build-linux]
+    needs: [build-firmware, build-linux, build-gui]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -117,11 +143,15 @@ jobs:
             ## LinuxCNC
             - **Tiggy-LinuxCNC.tar.gz** - HAL component source + interactive installer
 
+            ## Protocol Tester
+            - **TiggyProtocolTester.exe** - Windows GUI for testing and configuring the controller
+
             ## Mach3 Plugin
             Download from [Tiggy Pro releases](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller_Pro/releases/latest)
           files: |
             Tiggy-LinuxCNC.tar.gz
             firmware-esp32s3-devkitc.zip
             firmware-esp32s3-zero.zip
+            TiggyProtocolTester/TiggyProtocolTester.exe
           prerelease: false
           make_latest: true
