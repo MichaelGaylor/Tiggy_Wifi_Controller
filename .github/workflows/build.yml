@@ -117,10 +117,14 @@ jobs:
           # LinuxCNC installer
           cd Tiggy-LinuxCNC && tar czf ../Tiggy-LinuxCNC.tar.gz . && cd ..
 
-          # Firmware binaries
+          # Firmware binaries (zip + individual bins for web flasher)
           for board in esp32s3-devkitc esp32s3-zero; do
             if [ -d "firmware-$board" ]; then
               cd "firmware-$board" && zip -r "../firmware-$board.zip" . && cd ..
+              # Flat bin files for esp-web-tools manifest
+              cp "firmware-$board/bootloader.bin" "bootloader-$board.bin"
+              cp "firmware-$board/partitions.bin" "partitions-$board.bin"
+              cp "firmware-$board/firmware.bin" "firmware-$board.bin"
             fi
           done
 
@@ -152,6 +156,12 @@ jobs:
             Tiggy-LinuxCNC.tar.gz
             firmware-esp32s3-devkitc.zip
             firmware-esp32s3-zero.zip
+            bootloader-esp32s3-devkitc.bin
+            partitions-esp32s3-devkitc.bin
+            firmware-esp32s3-devkitc.bin
+            bootloader-esp32s3-zero.bin
+            partitions-esp32s3-zero.bin
+            firmware-esp32s3-zero.bin
             TiggyProtocolTester/TiggyProtocolTester.exe
           prerelease: false
           make_latest: true
