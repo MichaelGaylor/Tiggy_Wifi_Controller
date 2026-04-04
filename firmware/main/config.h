@@ -46,7 +46,7 @@
 
 #define CFG_ETH_TIMEOUT_MS              5000    /* W5500 detection + DHCP timeout */
 
-#define CFG_AP_SSID_PREFIX              "WiFiCNC-"
+#define CFG_AP_SSID_PREFIX              "TiggyCNC-"
 #define CFG_AP_DEFAULT_PASSWORD         "12345678"
 #define CFG_AP_CHANNEL                  1
 #define CFG_AP_MAX_CONNECTIONS          2

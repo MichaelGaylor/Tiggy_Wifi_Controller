@@ -353,7 +353,7 @@ void grbl_build_info(grbl_output_fn out, void *ctx)
 {
     char buf[128];
     int n = snprintf(buf, sizeof(buf),
-        "[VER:1.1h WiFiCNC ESP32-S3]\r\n"
+        "[VER:1.1h TiggyCNC ESP32-S3]\r\n"
         "[OPT:V,15,128]\r\n");
     out(buf, n, ctx);
 }

@@ -4,12 +4,13 @@
  * On boot:
  *   - If stored SSID is non-empty, attempt STA connection
  *   - If STA fails within CFG_WIFI_STA_TIMEOUT_MS, fall back to AP mode
- *   - AP SSID: "WiFiCNC-XXXX" (last 4 hex digits of MAC address)
+ *   - AP SSID: "TiggyCNC-XXXX" (last 4 hex digits of MAC address)
  *
  * Reconnection uses exponential backoff: 100ms, 200ms, 400ms, ... 5000ms
  */
 
 #include "wifi_manager.h"
+#include "captive_portal.h"
 #include "../config.h"
 #include "../persist/nvs_config.h"
 
@@ -128,6 +129,9 @@ static void start_ap_mode(void)
     s_ap_mode = true;
     ESP_LOGI(TAG, "AP mode active: SSID='%s' Password='%s'",
              ap_ssid, CFG_AP_DEFAULT_PASSWORD);
+
+    /* Start captive portal for WiFi setup via browser */
+    captive_portal_start();
 }
 
 /* ===================================================================
