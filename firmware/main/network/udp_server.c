@@ -22,6 +22,10 @@ static const char *TAG = "udp_srv";
 static struct sockaddr_in s_host_addr;
 static bool s_host_known = false;
 static int s_status_sock = -1;
+static TickType_t s_last_packet_tick = 0;
+
+/* Host is considered disconnected after 3 seconds of no UDP packets */
+#define UDP_HOST_TIMEOUT_MS  3000
 
 /* ===================================================================
  * Host Tracking
@@ -29,7 +33,15 @@ static int s_status_sock = -1;
 
 bool udp_has_host(void)
 {
-    return s_host_known;
+    if (!s_host_known) return false;
+
+    /* Check for timeout */
+    TickType_t now = xTaskGetTickCount();
+    if ((now - s_last_packet_tick) > pdMS_TO_TICKS(UDP_HOST_TIMEOUT_MS)) {
+        s_host_known = false;
+        return false;
+    }
+    return true;
 }
 
 bool udp_get_host_addr(struct sockaddr_in *addr)
@@ -118,9 +130,10 @@ void udp_receive_task(void *pvParameters)
 
         if (len < (int)sizeof(wcnc_header_t)) continue;
 
-        /* Update host address */
+        /* Update host address and timestamp */
         memcpy(&s_host_addr, &source_addr, sizeof(s_host_addr));
         s_host_known = true;
+        s_last_packet_tick = xTaskGetTickCount();
 
         /* Dispatch packet */
         protocol_handle_udp_packet(rx_buffer, (size_t)len);
