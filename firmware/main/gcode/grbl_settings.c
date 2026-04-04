@@ -91,23 +91,23 @@ static const setting_map_t settings[] = {
     { 104, "spm_b",  STYPE_FLOAT, CONV_NONE, 4, CFG_DEFAULT_STEPS_PER_MM },
     { 105, "spm_c",  STYPE_FLOAT, CONV_NONE, 5, CFG_DEFAULT_STEPS_PER_MM },
 
-    /* Per-axis max rate in mm/min ($110-$115) — stored as steps/sec
-     * Default: 6667 steps/sec = 500 mm/min at 800 steps/mm */
-    { 110, "rate_x", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 0, 6667.0f },
-    { 111, "rate_y", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 1, 6667.0f },
-    { 112, "rate_z", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 2, 6667.0f },
-    { 113, "rate_a", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 3, 6667.0f },
-    { 114, "rate_b", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 4, 6667.0f },
-    { 115, "rate_c", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 5, 6667.0f },
+    /* Per-axis max rate in mm/min ($110-$115) — stored as float steps/sec
+     * Default: 6666.67 steps/sec = 500 mm/min at 800 steps/mm */
+    { 110, "rate_x", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 0, 6666.67f },
+    { 111, "rate_y", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 1, 6666.67f },
+    { 112, "rate_z", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 2, 6666.67f },
+    { 113, "rate_a", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 3, 6666.67f },
+    { 114, "rate_b", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 4, 6666.67f },
+    { 115, "rate_c", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 5, 6666.67f },
 
-    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as steps/sec^2
-     * Default: 40000 steps/sec^2 = 50 mm/sec^2 at 800 steps/mm */
-    { 120, "acc_x",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 0, 40000.0f },
-    { 121, "acc_y",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 1, 40000.0f },
-    { 122, "acc_z",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 2, 40000.0f },
-    { 123, "acc_a",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 3, 40000.0f },
-    { 124, "acc_b",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 4, 40000.0f },
-    { 125, "acc_c",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 5, 40000.0f },
+    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as float steps/sec^2
+     * Default: 40000.0 steps/sec^2 = 50 mm/sec^2 at 800 steps/mm */
+    { 120, "acc_x",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 0, 40000.0f },
+    { 121, "acc_y",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 1, 40000.0f },
+    { 122, "acc_z",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 2, 40000.0f },
+    { 123, "acc_a",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 3, 40000.0f },
+    { 124, "acc_b",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 4, 40000.0f },
+    { 125, "acc_c",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 5, 40000.0f },
 
     /* Max travel ($130-$132) — for soft limits */
     { 130, "trvl_x", STYPE_FLOAT, CONV_NONE, 0, 200.0f },
