@@ -101,43 +101,6 @@ jobs:
           name: TiggyProtocolTester
           path: tools/dist/TiggyProtocolTester.exe
 
-  deploy-pages:
-    name: Deploy Web Flasher
-    needs: [build-firmware]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download firmware artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Copy firmware binaries to docs
-        run: |
-          mkdir -p docs/firmware
-          for board in esp32s3-devkitc esp32s3-devkitc-quad esp32s3-zero; do
-            if [ -d "firmware-$board" ]; then
-              cp "firmware-$board/bootloader.bin" "docs/firmware/bootloader-$board.bin"
-              cp "firmware-$board/partitions.bin" "docs/firmware/partitions-$board.bin"
-              cp "firmware-$board/firmware.bin" "docs/firmware/firmware-$board.bin"
-            fi
-          done
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
   release:
     name: Create Release
     needs: [build-firmware, build-linux, build-gui]

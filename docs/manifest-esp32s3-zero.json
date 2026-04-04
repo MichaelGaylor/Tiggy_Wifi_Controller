@@ -6,9 +6,9 @@
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/bootloader-esp32s3-zero.bin", "offset": 0 },
-        { "path": "firmware/partitions-esp32s3-zero.bin", "offset": 32768 },
-        { "path": "firmware/firmware-esp32s3-zero.bin", "offset": 65536 }
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/bootloader-esp32s3-zero.bin", "offset": 0 },
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/partitions-esp32s3-zero.bin", "offset": 32768 },
+        { "path": "https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/firmware-esp32s3-zero.bin", "offset": 65536 }
       ]
     }
   ]
