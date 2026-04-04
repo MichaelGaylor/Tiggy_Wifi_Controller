@@ -74,8 +74,9 @@ static const setting_map_t settings[] = {
     { 21,  "hard_lim",  STYPE_UINT8,  CONV_NONE, -1, 0 },
     { 22,  "hm_en",     STYPE_UINT8,  CONV_NONE, -1, 1 },
     { 23,  "hm_dir",    STYPE_UINT8,  CONV_NONE, -1, CFG_DEFAULT_HOMING_DIR_MASK },
-    { 24,  "hm_feed",   STYPE_UINT32, CONV_FEED_MM_TO_SPS, -1, 25.0f },
-    { 25,  "hm_seek",   STYPE_UINT32, CONV_FEED_MM_TO_SPS, -1, 500.0f },
+    /* Default: hm_feed = 500 steps/sec = 37.5 mm/min, hm_seek = 5000 steps/sec = 375 mm/min */
+    { 24,  "hm_feed",   STYPE_UINT32, CONV_FEED_MM_TO_SPS, -1, CFG_DEFAULT_HOMING_FEED_RATE },
+    { 25,  "hm_seek",   STYPE_UINT32, CONV_FEED_MM_TO_SPS, -1, CFG_DEFAULT_HOMING_SEEK_RATE },
     { 26,  "hm_dbnc",   STYPE_UINT16, CONV_NONE, -1, CFG_INPUT_DEBOUNCE_MS },
     { 27,  "hm_pull",   STYPE_UINT32, CONV_PULL_MM_TO_STEPS, -1, 1.0f },
 
@@ -90,21 +91,23 @@ static const setting_map_t settings[] = {
     { 104, "spm_b",  STYPE_FLOAT, CONV_NONE, 4, CFG_DEFAULT_STEPS_PER_MM },
     { 105, "spm_c",  STYPE_FLOAT, CONV_NONE, 5, CFG_DEFAULT_STEPS_PER_MM },
 
-    /* Per-axis max rate in mm/min ($110-$115) — stored as steps/sec */
-    { 110, "rate_x", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 0, 1500.0f },
-    { 111, "rate_y", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 1, 1500.0f },
-    { 112, "rate_z", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 2, 1500.0f },
-    { 113, "rate_a", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 3, 1500.0f },
-    { 114, "rate_b", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 4, 1500.0f },
-    { 115, "rate_c", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 5, 1500.0f },
+    /* Per-axis max rate in mm/min ($110-$115) — stored as steps/sec
+     * Default: 6667 steps/sec = 500 mm/min at 800 steps/mm */
+    { 110, "rate_x", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 0, 6667.0f },
+    { 111, "rate_y", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 1, 6667.0f },
+    { 112, "rate_z", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 2, 6667.0f },
+    { 113, "rate_a", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 3, 6667.0f },
+    { 114, "rate_b", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 4, 6667.0f },
+    { 115, "rate_c", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 5, 6667.0f },
 
-    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as steps/sec^2 */
-    { 120, "acc_x",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 0, 10.0f },
-    { 121, "acc_y",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 1, 10.0f },
-    { 122, "acc_z",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 2, 10.0f },
-    { 123, "acc_a",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 3, 10.0f },
-    { 124, "acc_b",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 4, 10.0f },
-    { 125, "acc_c",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 5, 10.0f },
+    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as steps/sec^2
+     * Default: 40000 steps/sec^2 = 50 mm/sec^2 at 800 steps/mm */
+    { 120, "acc_x",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 0, 40000.0f },
+    { 121, "acc_y",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 1, 40000.0f },
+    { 122, "acc_z",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 2, 40000.0f },
+    { 123, "acc_a",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 3, 40000.0f },
+    { 124, "acc_b",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 4, 40000.0f },
+    { 125, "acc_c",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 5, 40000.0f },
 
     /* Max travel ($130-$132) — for soft limits */
     { 130, "trvl_x", STYPE_FLOAT, CONV_NONE, 0, 200.0f },
