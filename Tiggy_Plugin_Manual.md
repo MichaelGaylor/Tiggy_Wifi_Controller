@@ -13,7 +13,7 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 - Limit switches, home switches, E-stop, and probe inputs
 - Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs
 - Spindle encoder feedback for threading (G33/G76) and CSS (G96)
-- 5 misc outputs (EXTACT1-5) and 4 misc inputs (ACTIVATION1-4)
+- Up to 5 misc outputs (EXTACT1-5) and up to 4 misc inputs (ACTIVATION1-4) -- actual count depends on board variant
 - Input function mapping: assign physical buttons to Mach3 actions
 - I/O expansion module with B/C axis jog support
 - Board pin map profiles for different hardware configurations
@@ -25,7 +25,8 @@ The Tiggy Motion Controller plugin replaces Mach3's parallel port driver with a 
 | Board | MCU | Wired Axes | Misc Inputs |
 |-------|-----|------------|-------------|
 | Tiggy Standard board (ESP32-S3-Zero) | Waveshare ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | 0 |
-| Tiggy Pro board (ESP32-S3-DevKitC) | ESP32-S3-DevKitC-1 N16R8 | 6 (X/Y/Z/A/B/C) | 3 |
+| Tiggy Pro board (ESP32-S3-DevKitC, Octal) | ESP32-S3-DevKitC-1 N16R8 / N8R8 | 6 (X/Y/Z/A/B/C) | 2 |
+| Tiggy Pro board (ESP32-S3-DevKitC, Quad) | ESP32-S3-DevKitC-1 N8 / N8R2 | 6 (X/Y/Z/A/B/C) | 3 |
 | Classic board (ESP32-WROOM-32) | ESP32-WROOM-32 DevKit | 6 (limited I/O) | 0 |
 
 **Mach3 Plugin Licensing:** The Free tier supports 3 axes (X/Y/Z). The Pro Mach3 license unlocks 6 axes, I/O expansion module, and spindle encoder threading. Note: the ESP32 firmware is open source and supports all 6 axes with no restrictions. If you use LinuxCNC, GRBL senders, or any other host software, all 6 axes work for free. The 3-axis limit applies **only** to the Mach3 plugin. Download from [www.tiggyengineering.com](https://www.tiggyengineering.com).
@@ -148,7 +149,7 @@ Four dropdown selectors, one for each misc input (Input 1 through Input 4). Each
 - Input 3 = E-Stop (wire a red mushroom button to Misc In 3)
 - Input 4 = Reset (wire a momentary "Reset" button to Misc In 4)
 
-**Note:** The Tiggy Standard board has no misc input GPIOs assigned (all show `n/a` in Pin Map). The Tiggy Pro board has 3 misc inputs on GPIO 18, 21, and 32. (GPIO 47 was reassigned to the W5500 Ethernet interrupt pin.)
+**Note:** The Tiggy Standard board has no misc input GPIOs assigned (all show `n/a` in Pin Map). The Tiggy Pro board (Octal, default) has 2 misc inputs on GPIO 18 and 21. The Tiggy Pro board (Quad) has 3 misc inputs on GPIO 18, 21, and 36. (GPIO 47 is the W5500 Ethernet interrupt pin.)
 
 
 ### Tab 4: Advanced
@@ -405,7 +406,7 @@ Five general-purpose digital outputs controlled via Mach3's external activation 
 - **M64/M65** (immediate): The output changes instantly when the M-code is executed, even if motion is still in progress from a previous line.
 - **M62/M63** (motion-synced): The macro waits for all queued motion to complete before changing the output. Use these when timing matters (e.g. activating a clamp after a move completes).
 
-**Hardware availability:** The Tiggy Standard board has 2 misc output GPIOs (Output #1 on GPIO 11, Output #2 on GPIO 12). The Tiggy Pro board also has 2 misc output GPIOs. Outputs #3-#5 are reserved for future expansion.
+**Hardware availability:** The Tiggy Standard board has 2 misc output GPIOs (Output #1 on GPIO 11, Output #2 on GPIO 12). The Tiggy Pro board (Quad) has 2 misc output GPIOs (GPIO 11, GPIO 12) plus a charge pump on GPIO 10. The Tiggy Pro board (Octal, default) has no misc output GPIOs and no charge pump -- these pins are used for A/B/C direction outputs. Outputs #3-#5 are reserved for future expansion.
 
 ### M-Code Macros (Required)
 

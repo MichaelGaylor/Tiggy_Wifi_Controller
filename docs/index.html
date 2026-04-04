@@ -129,8 +129,12 @@
             <h2>1. Select Your Board</h2>
             <div class="board-select">
                 <div class="board-option selected" onclick="selectBoard(this, 'esp32s3-devkitc')" id="board-devkitc">
-                    <h3>Tiggy Pro Board &mdash; ESP32-S3-DevKitC-1</h3>
-                    <p><span class="axes">6 wired axes</span> (X/Y/Z/A/B/C) &bull; 16MB Flash &bull; 8MB PSRAM &bull; Full I/O</p>
+                    <h3>Tiggy Pro Board (Octal) &mdash; ESP32-S3-DevKitC-1</h3>
+                    <p><span class="axes">6 wired axes</span> (X/Y/Z/A/B/C) &bull; 16MB Flash &bull; Octal PSRAM (N16R8/N8R8)</p>
+                </div>
+                <div class="board-option" onclick="selectBoard(this, 'esp32s3-devkitc-quad')" id="board-devkitc-quad">
+                    <h3>Tiggy Pro Board (Quad) &mdash; ESP32-S3-DevKitC-1</h3>
+                    <p><span class="axes">6 wired axes</span> (X/Y/Z/A/B/C) &bull; 8MB Flash &bull; Quad PSRAM (N8/N8R2) &bull; More I/O</p>
                 </div>
                 <div class="board-option" onclick="selectBoard(this, 'esp32s3-zero')" id="board-zero">
                     <h3>Tiggy Standard Board &mdash; ESP32-S3-Zero</h3>

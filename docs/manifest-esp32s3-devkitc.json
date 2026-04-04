@@ -1,5 +1,5 @@
 {
-  "name": "Tiggy Pro (ESP32-S3-DevKitC)",
+  "name": "Tiggy Pro Octal (ESP32-S3-DevKitC)",
   "version": "1.0.0",
   "new_install_prompt_erase": false,
   "builds": [

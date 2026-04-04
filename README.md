@@ -24,7 +24,7 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 - Limit switches, home switches, E-stop, and probe inputs
 - Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs
 - **Spindle encoder** feedback for threading (G33/G76) and CSS (G96)
-- 5 misc outputs and 4 misc inputs with function mapping
+- Misc outputs and inputs with function mapping (count varies by board)
 - Optional **I/O expansion module** (pendant buttons, relay outputs)
 - Board pin map profiles for different hardware configurations
 - Auto-discovery and automatic reconnection
@@ -34,7 +34,8 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 | Board | MCU | Wired Axes | Notes |
 |-------|-----|------------|-------|
 | Tiggy Standard board | ESP32-S3-Zero (FH4R2) | 3 (X/Y/Z) | Compact, Quad SPI PSRAM |
-| Tiggy Pro board | ESP32-S3-DevKitC-1 (N16R8) | 6 (X/Y/Z/A/B/C) | Full I/O, Octal SPI PSRAM |
+| Tiggy Pro board (Octal) | ESP32-S3-DevKitC-1 (N16R8/N8R8) | 6 (X/Y/Z/A/B/C) | Octal SPI PSRAM, limited I/O |
+| Tiggy Pro board (Quad) | ESP32-S3-DevKitC-1 (N8/N8R2) | 6 (X/Y/Z/A/B/C) | Quad SPI PSRAM, more I/O |
 | Classic board | ESP32-WROOM-32 | 6 (limited I/O) | Legacy support |
 
 All boards run the same 6-axis firmware. "Wired Axes" refers to the number of step/dir GPIO pairs physically routed on the board. The firmware supports 6 axes regardless of board -- unused axes simply have no GPIO assigned.

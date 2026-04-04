@@ -15,7 +15,9 @@ jobs:
       matrix:
         include:
           - board: esp32s3-devkitc
-            label: "Tiggy Pro board (DevKitC N16R8)"
+            label: "Tiggy Pro board (DevKitC Octal N16R8)"
+          - board: esp32s3-devkitc-quad
+            label: "Tiggy Pro board (DevKitC Quad N8/N8R2)"
           - board: esp32s3-zero
             label: "Tiggy Standard board (S3-Zero)"
     steps:
@@ -118,7 +120,7 @@ jobs:
           cd Tiggy-LinuxCNC && tar czf ../Tiggy-LinuxCNC.tar.gz . && cd ..
 
           # Firmware binaries (zip + individual bins for web flasher)
-          for board in esp32s3-devkitc esp32s3-zero; do
+          for board in esp32s3-devkitc esp32s3-devkitc-quad esp32s3-zero; do
             if [ -d "firmware-$board" ]; then
               cd "firmware-$board" && zip -r "../firmware-$board.zip" . && cd ..
               # Flat bin files for esp-web-tools manifest
@@ -141,7 +143,8 @@ jobs:
             Automated build from commit ${{ github.sha }}
 
             ## ESP32 Firmware (flash via USB)
-            - **firmware-esp32s3-devkitc.zip** - 6-axis DevKitC-1 N16R8
+            - **firmware-esp32s3-devkitc.zip** - 6-axis DevKitC-1 N16R8 (Octal, default)
+            - **firmware-esp32s3-devkitc-quad.zip** - 6-axis DevKitC-1 N8/N8R2 (Quad)
             - **firmware-esp32s3-zero.zip** - 3-axis Waveshare S3-Zero
 
             ## LinuxCNC
@@ -155,10 +158,14 @@ jobs:
           files: |
             Tiggy-LinuxCNC.tar.gz
             firmware-esp32s3-devkitc.zip
+            firmware-esp32s3-devkitc-quad.zip
             firmware-esp32s3-zero.zip
             bootloader-esp32s3-devkitc.bin
             partitions-esp32s3-devkitc.bin
             firmware-esp32s3-devkitc.bin
+            bootloader-esp32s3-devkitc-quad.bin
+            partitions-esp32s3-devkitc-quad.bin
+            firmware-esp32s3-devkitc-quad.bin
             bootloader-esp32s3-zero.bin
             partitions-esp32s3-zero.bin
             firmware-esp32s3-zero.bin
