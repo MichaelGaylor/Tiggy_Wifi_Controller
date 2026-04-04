@@ -284,7 +284,6 @@ void captive_portal_start(void)
     /* Start HTTP server */
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 8;
-    config.max_req_hdr_len = 1024;
     config.uri_match_fn = httpd_uri_match_wildcard;
 
     if (httpd_start(&s_httpd, &config) != ESP_OK) {

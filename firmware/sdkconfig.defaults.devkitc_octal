@@ -52,6 +52,9 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # Disable brownout detector (CNC power can be noisy)
 CONFIG_ESP_BROWNOUT_DET=n
 
+# HTTP server (captive portal)
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+
 # Log level: Info (show startup and guard diagnostics on serial)
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL=2
