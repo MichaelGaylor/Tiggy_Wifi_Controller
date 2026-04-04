@@ -101,6 +101,42 @@ jobs:
           name: TiggyProtocolTester
           path: tools/dist/TiggyProtocolTester.exe
 
+  update-flasher:
+    name: Update web flasher binaries
+    needs: [build-firmware]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Copy firmware binaries to docs
+        run: |
+          mkdir -p docs/firmware
+          for board in esp32s3-devkitc esp32s3-devkitc-quad esp32s3-zero; do
+            if [ -d "firmware-$board" ]; then
+              cp "firmware-$board/bootloader.bin" "docs/firmware/bootloader-$board.bin"
+              cp "firmware-$board/partitions.bin" "docs/firmware/partitions-$board.bin"
+              cp "firmware-$board/firmware.bin" "docs/firmware/firmware-$board.bin"
+            fi
+          done
+
+      - name: Commit updated binaries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/firmware/
+          if git diff --cached --quiet; then
+            echo "No firmware changes to commit"
+          else
+            git commit -m "Update web flasher firmware binaries [skip ci]"
+            git push
+          fi
+
   release:
     name: Create Release
     needs: [build-firmware, build-linux, build-gui]
