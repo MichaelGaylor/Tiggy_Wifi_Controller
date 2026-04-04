@@ -18,6 +18,7 @@ idf_component_register(
         "network/udp_server.c"
         "network/tcp_server.c"
         "network/protocol_handler.c"
+        "network/captive_portal.c"
         "io/gpio_control.c"
         "io/status_led.c"
         "io/spindle_encoder.c"
@@ -42,5 +43,5 @@ idf_component_register(
         "gcode"
         "../../protocol"
     REQUIRES
-        driver esp_driver_pcnt esp_wifi esp_eth esp_event nvs_flash esp_timer lwip esp_netif
+        driver esp_driver_pcnt esp_wifi esp_eth esp_event nvs_flash esp_timer lwip esp_netif esp_http_server
 )
