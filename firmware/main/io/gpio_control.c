@@ -20,10 +20,19 @@
 
 static const char *TAG = "gpio_ctrl";
 
-/* Check if a GPIO pin is valid (not NC / not 0xFF from NVS) */
-static inline bool pin_valid(gpio_num_t pin)
+/* Check if a GPIO pin is usable on this board (not NC / not memory bus) */
+static inline bool pin_valid_input(gpio_num_t pin)
 {
-    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX;
+    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX &&
+           GPIO_IS_VALID_GPIO(pin) &&
+           !PIN_RESERVED_FOR_MEMORY_BUS(pin);
+}
+
+static inline bool pin_valid_output(gpio_num_t pin)
+{
+    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX &&
+           GPIO_IS_VALID_OUTPUT_GPIO(pin) &&
+           !PIN_RESERVED_FOR_MEMORY_BUS(pin);
 }
 
 static gpio_num_t s_limit_pins[WCNC_MAX_AXES];
@@ -64,7 +73,7 @@ static void debounce_timer_callback(void *arg)
     uint8_t state = 0;
 
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        if (!pin_valid(s_limit_pins[i])) continue;
+        if (!pin_valid_input(s_limit_pins[i])) continue;
         int level = gpio_get_level(s_limit_pins[i]);
         bool triggered = (bool)level ^ ((s_invert_limit >> i) & 1);
         if (triggered) {
@@ -160,9 +169,29 @@ void gpio_control_init(void)
              s_limit_pins[3], s_limit_pins[4], s_limit_pins[5],
              s_estop_pin, s_probe_pin, s_spindle_pin, s_led_pin);
 
+    for (int i = 0; i < WCNC_MAX_AXES; i++) {
+        if (!pin_valid_input(s_limit_pins[i])) {
+            if ((int)s_limit_pins[i] != GPIO_NUM_NC) {
+                ESP_LOGW(TAG, "Limit pin %d is not usable on this board, disabling", (int)s_limit_pins[i]);
+            }
+            s_limit_pins[i] = GPIO_NUM_NC;
+        }
+    }
+    if (!pin_valid_input(s_estop_pin)) {
+        ESP_LOGW(TAG, "E-stop pin %d is not usable on this board, disabling", (int)s_estop_pin);
+        s_estop_pin = GPIO_NUM_NC;
+    }
+    if (!pin_valid_input(s_probe_pin)) {
+        ESP_LOGW(TAG, "Probe pin %d is not usable on this board, disabling", (int)s_probe_pin);
+        s_probe_pin = GPIO_NUM_NC;
+    }
+    if (!pin_valid_output(s_spindle_pin)) {
+        ESP_LOGW(TAG, "Spindle pin %d is not usable on this board, disabling", (int)s_spindle_pin);
+        s_spindle_pin = GPIO_NUM_NC;
+    }
     /* Configure limit switch inputs (skip NC pins for unused axes) */
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        if (!pin_valid(s_limit_pins[i])) continue;
+        if (!pin_valid_input(s_limit_pins[i])) continue;
         gpio_config_t io_conf = {
             .pin_bit_mask = (1ULL << s_limit_pins[i]),
             .mode = GPIO_MODE_INPUT,
@@ -181,35 +210,41 @@ void gpio_control_init(void)
     }
 
     /* Configure hardware E-Stop input (active low, internal pull-up) */
-    gpio_config_t estop_conf = {
-        .pin_bit_mask = (1ULL << s_estop_pin),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE,
-    };
-    gpio_config(&estop_conf);
+    if (pin_valid_input(s_estop_pin)) {
+        gpio_config_t estop_conf = {
+            .pin_bit_mask = (1ULL << s_estop_pin),
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_ANYEDGE,
+        };
+        gpio_config(&estop_conf);
+    }
 
     /* Configure probe input */
-    gpio_config_t probe_conf = {
-        .pin_bit_mask = (1ULL << s_probe_pin),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&probe_conf);
+    if (pin_valid_input(s_probe_pin)) {
+        gpio_config_t probe_conf = {
+            .pin_bit_mask = (1ULL << s_probe_pin),
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&probe_conf);
+    }
 
     /* Configure spindle enable output */
-    gpio_config_t spindle_conf = {
-        .pin_bit_mask = (1ULL << s_spindle_pin),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&spindle_conf);
-    gpio_set_level(s_spindle_pin, 0);
+    if (pin_valid_output(s_spindle_pin)) {
+        gpio_config_t spindle_conf = {
+            .pin_bit_mask = (1ULL << s_spindle_pin),
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&spindle_conf);
+        gpio_set_level(s_spindle_pin, 0);
+    }
 
     /* Status LED is handled by status_led module (supports WS2812) */
 
@@ -229,10 +264,12 @@ void gpio_control_init(void)
     /* Install GPIO ISR service and attach to limit pins + E-Stop */
     gpio_install_isr_service(0);
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        if (!pin_valid(s_limit_pins[i])) continue;
+        if (!pin_valid_input(s_limit_pins[i])) continue;
         gpio_isr_handler_add(s_limit_pins[i], limit_switch_isr, NULL);
     }
-    gpio_isr_handler_add(s_estop_pin, estop_isr, NULL);
+    if (pin_valid_input(s_estop_pin)) {
+        gpio_isr_handler_add(s_estop_pin, estop_isr, NULL);
+    }
 
     /* Configure misc output pins (board-dependent) */
 #if MISC_OUTPUT_COUNT > 0
@@ -246,6 +283,11 @@ void gpio_control_init(void)
         static const char *misc_nvs[] = {"p_mo0", "p_mo1"};
         for (int i = 0; i < MISC_OUTPUT_COUNT; i++) {
             s_misc_out_pins[i] = (gpio_num_t)nvs_config_get_u8(misc_nvs[i], (uint8_t)misc_defaults[i]);
+            if (!pin_valid_output(s_misc_out_pins[i])) {
+                ESP_LOGW(TAG, "Misc output pin %d is not usable on this board, disabling", (int)s_misc_out_pins[i]);
+                s_misc_out_pins[i] = GPIO_NUM_NC;
+                continue;
+            }
             gpio_config_t misc_conf = {
                 .pin_bit_mask = (1ULL << s_misc_out_pins[i]),
                 .mode = GPIO_MODE_OUTPUT,
@@ -278,7 +320,7 @@ void gpio_control_init(void)
         static const char *misc_in_nvs[] = {"p_mi0", "p_mi1", "p_mi2", "p_mi3"};
         for (int i = 0; i < MISC_INPUT_COUNT; i++) {
             s_misc_in_pins[i] = (gpio_num_t)nvs_config_get_u8(misc_in_nvs[i], (uint8_t)misc_in_defaults[i]);
-            if (pin_valid(s_misc_in_pins[i])) {
+            if (pin_valid_input(s_misc_in_pins[i])) {
                 gpio_config_t mi_conf = {
                     .pin_bit_mask = (1ULL << s_misc_in_pins[i]),
                     .mode = GPIO_MODE_INPUT,
@@ -296,7 +338,10 @@ void gpio_control_init(void)
 #if HAS_CHARGE_PUMP
     /* Charge pump pin configured on-demand when enabled */
     s_charge_pump_pin = (gpio_num_t)nvs_config_get_u8("p_cp", (uint8_t)PIN_CHARGE_PUMP);
-    {
+    if (!pin_valid_output(s_charge_pump_pin)) {
+        ESP_LOGW(TAG, "Charge pump pin %d is not usable on this board, disabling", (int)s_charge_pump_pin);
+        s_charge_pump_pin = GPIO_NUM_NC;
+    } else {
         gpio_config_t cp_conf = {
             .pin_bit_mask = (1ULL << s_charge_pump_pin),
             .mode = GPIO_MODE_OUTPUT,
@@ -319,7 +364,7 @@ void gpio_control_init(void)
 bool gpio_control_get_limit(int axis)
 {
     if (axis < 0 || axis >= WCNC_MAX_AXES) return false;
-    if (!pin_valid(s_limit_pins[axis])) return false;
+    if (!pin_valid_input(s_limit_pins[axis])) return false;
     int level = gpio_get_level(s_limit_pins[axis]);
     return (bool)level ^ ((s_invert_limit >> axis) & 1);
 }
@@ -331,6 +376,7 @@ uint8_t gpio_control_get_limit_mask(void)
 
 bool gpio_control_get_probe(void)
 {
+    if (!pin_valid_input(s_probe_pin)) return false;
     int level = gpio_get_level(s_probe_pin);
     return ((bool)level) ^ (s_invert_probe == 0);
 }
@@ -344,7 +390,7 @@ uint8_t gpio_control_get_home_mask(void)
 {
     uint8_t mask = 0;
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        if (!pin_valid(s_limit_pins[i])) continue;
+        if (!pin_valid_input(s_limit_pins[i])) continue;
         int level = gpio_get_level(s_limit_pins[i]);  /* Same physical pin as limit */
         bool triggered = (bool)level ^ ((s_invert_home >> i) & 1);  /* Home inversion */
         if (triggered) mask |= (1 << i);
@@ -364,7 +410,9 @@ void gpio_control_reload_inversion(void)
 
 void gpio_control_set_spindle(bool enabled)
 {
-    gpio_set_level(s_spindle_pin, enabled ? 1 : 0);
+    if (pin_valid_output(s_spindle_pin)) {
+        gpio_set_level(s_spindle_pin, enabled ? 1 : 0);
+    }
 }
 
 void gpio_control_set_led(bool on)
@@ -389,6 +437,7 @@ static uint8_t s_misc_output_state = 0;
 void gpio_control_set_charge_pump(bool enabled)
 {
 #if HAS_CHARGE_PUMP
+    if (!pin_valid_output(s_charge_pump_pin)) return;
     if (enabled && !s_charge_pump_active) {
         /* Start PWM at configured frequency (default 10kHz) */
         uint16_t freq = nvs_config_get_u16("cp_freq", 10000);
@@ -428,6 +477,7 @@ void gpio_control_set_misc_output(int idx, bool state)
 {
 #if MISC_OUTPUT_COUNT > 0
     if (idx < 0 || idx >= MISC_OUTPUT_COUNT) return;
+    if (!pin_valid_output(s_misc_out_pins[idx])) return;
     gpio_set_level(s_misc_out_pins[idx], state ? 1 : 0);
     if (state)
         s_misc_output_state |= (1 << idx);
@@ -453,7 +503,7 @@ uint8_t gpio_control_get_misc_input_mask(void)
 #if MISC_INPUT_COUNT > 0
     uint8_t mask = 0;
     for (int i = 0; i < MISC_INPUT_COUNT; i++) {
-        if (pin_valid(s_misc_in_pins[i])) {
+        if (pin_valid_input(s_misc_in_pins[i])) {
             if (gpio_get_level(s_misc_in_pins[i]))
                 mask |= (1 << i);
         }
@@ -478,3 +528,5 @@ uint8_t gpio_control_get_capabilities(void)
 #endif
     return caps;
 }
+
+

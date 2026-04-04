@@ -25,10 +25,12 @@
 
 static const char *TAG = "encoder";
 
-/* Check if a GPIO pin is valid (not NC / not 0xFF) */
+/* Check if a GPIO pin is usable on this board (not NC / not memory bus) */
 static inline bool pin_valid(gpio_num_t pin)
 {
-    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX;
+    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX &&
+           GPIO_IS_VALID_GPIO(pin) &&
+           !PIN_RESERVED_FOR_MEMORY_BUS(pin);
 }
 
 /* State */
@@ -331,3 +333,4 @@ uint32_t spindle_encoder_get_index_count(void)
 {
     return s_index_count;
 }
+

@@ -91,6 +91,12 @@ bool eth_manager_init(void)
     int int_pin  = (int)nvs_config_get_u8("p_eint",  PIN_ETH_INT);
     int spi_host = (int)nvs_config_get_u8("p_espi",  PIN_ETH_SPI_HOST);
 
+    if (spi_host <= SPI1_HOST || spi_host >= SPI_HOST_MAX) {
+        ESP_LOGW(TAG, "Invalid W5500 SPI host %d in config, using default %d",
+                 spi_host, PIN_ETH_SPI_HOST);
+        spi_host = PIN_ETH_SPI_HOST;
+    }
+
     ESP_LOGI(TAG, "W5500 pins: MOSI=%d MISO=%d SCLK=%d INT=%d SPI_HOST=%d",
              mosi_pin, miso_pin, sclk_pin, int_pin, spi_host);
 
@@ -109,6 +115,51 @@ bool eth_manager_init(void)
         vEventGroupDelete(s_eth_event_group);
         s_eth_event_group = NULL;
         return false;
+    }
+
+    /* Quick SPI probe: read W5500 VERSIONR before bringing up the driver.
+     * If the module is absent or misconfigured, fall back to WiFi cleanly
+     * instead of stalling long enough to trip the watchdog. */
+    {
+        spi_device_interface_config_t probe_cfg = {
+            .command_bits   = 16,
+            .address_bits   = 8,
+            .mode           = 0,
+            .clock_speed_hz = 1000000,
+            .spics_io_num   = -1,
+            .queue_size     = 1,
+        };
+        spi_device_handle_t probe_dev = NULL;
+        ret = spi_bus_add_device(spi_host, &probe_cfg, &probe_dev);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "SPI device add failed (%s) - no W5500?",
+                     esp_err_to_name(ret));
+            spi_bus_free(spi_host);
+            vEventGroupDelete(s_eth_event_group);
+            s_eth_event_group = NULL;
+            return false;
+        }
+
+        spi_transaction_t t = {0};
+        uint8_t rx_data[1] = {0};
+        t.length = 8;
+        t.cmd = 0x0039;
+        t.addr = 0x00;
+        t.rx_buffer = rx_data;
+        ret = spi_device_transmit(probe_dev, &t);
+        uint8_t version = (ret == ESP_OK) ? rx_data[0] : 0;
+        spi_bus_remove_device(probe_dev);
+
+        if (version != 0x04) {
+            ESP_LOGW(TAG, "W5500 not detected (version=0x%02X, expected 0x04) - using WiFi",
+                     version);
+            spi_bus_free(spi_host);
+            vEventGroupDelete(s_eth_event_group);
+            s_eth_event_group = NULL;
+            return false;
+        }
+
+        ESP_LOGI(TAG, "W5500 detected (version=0x%02X)", version);
     }
 
     /* Configure W5500 SPI device (CS tied to GND = always selected, use -1) */

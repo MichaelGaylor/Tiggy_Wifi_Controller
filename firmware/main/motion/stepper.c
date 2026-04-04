@@ -135,22 +135,31 @@ static inline void IRAM_ATTR gpio_clear_fast(gpio_num_t pin)
     gpio_ll_set_level(&GPIO, pin, 0);
 }
 
-/* Check if a GPIO pin is valid (not NC / not 0xFF from NVS) */
-static inline bool pin_valid(gpio_num_t pin)
+/* Check if a GPIO pin is usable on this board (not NC / not memory bus) */
+static inline bool pin_valid_output(gpio_num_t pin)
 {
-    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX;
+    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX &&
+           GPIO_IS_VALID_OUTPUT_GPIO(pin) &&
+           !PIN_RESERVED_FOR_MEMORY_BUS(pin);
+}
+
+static inline bool pin_valid_input(gpio_num_t pin)
+{
+    return (int)pin >= 0 && (int)pin < GPIO_NUM_MAX &&
+           GPIO_IS_VALID_GPIO(pin) &&
+           !PIN_RESERVED_FOR_MEMORY_BUS(pin);
 }
 
 static inline void IRAM_ATTR set_step_pin(int axis, bool state)
 {
-    if (!pin_valid(st.step_pins[axis])) return;
+    if (!pin_valid_output(st.step_pins[axis])) return;
     bool actual = state ^ ((st.invert_step >> axis) & 1);
     gpio_ll_set_level(&GPIO, st.step_pins[axis], actual ? 1 : 0);
 }
 
 static inline void IRAM_ATTR set_dir_pin(int axis, bool positive)
 {
-    if (!pin_valid(st.dir_pins[axis])) return;
+    if (!pin_valid_output(st.dir_pins[axis])) return;
     bool actual = positive ^ ((st.invert_dir >> axis) & 1);
     gpio_ll_set_level(&GPIO, st.dir_pins[axis], actual ? 1 : 0);
 }
@@ -197,7 +206,7 @@ static bool IRAM_ATTR stepper_timer_isr(gptimer_handle_t timer,
     }
 
     /* Probe detection: check probe pin during probe segments */
-    if (st.seg_flags & WCNC_SEG_FLAG_PROBE) {
+    if ((st.seg_flags & WCNC_SEG_FLAG_PROBE) && pin_valid_input(st.probe_pin)) {
         bool pin_state = gpio_ll_get_level(&GPIO, st.probe_pin);
         if (pin_state ^ (st.invert_probe & 1)) {
             /* Probe triggered — stop immediately, preserve position */
@@ -379,6 +388,32 @@ void stepper_init(void)
                  st.enable_pin, st.probe_pin);
     }
 
+    for (int i = 0; i < WCNC_MAX_AXES; i++) {
+        bool has_step = pin_valid_output(st.step_pins[i]);
+        bool has_dir = pin_valid_output(st.dir_pins[i]);
+        if (has_step != has_dir) {
+            ESP_LOGW(TAG, "Axis %d has unusable step/dir pin pair (%d,%d), disabling axis", i,
+                     (int)st.step_pins[i], (int)st.dir_pins[i]);
+            st.step_pins[i] = GPIO_NUM_NC;
+            st.dir_pins[i] = GPIO_NUM_NC;
+            continue;
+        }
+        if (!has_step && ((int)st.step_pins[i] != GPIO_NUM_NC || (int)st.dir_pins[i] != GPIO_NUM_NC)) {
+            ESP_LOGW(TAG, "Axis %d pins (%d,%d) are not usable on this board, disabling axis", i,
+                     (int)st.step_pins[i], (int)st.dir_pins[i]);
+            st.step_pins[i] = GPIO_NUM_NC;
+            st.dir_pins[i] = GPIO_NUM_NC;
+        }
+    }
+    if (!pin_valid_output(st.enable_pin)) {
+        ESP_LOGW(TAG, "Enable pin %d is not usable on this board, disabling", (int)st.enable_pin);
+        st.enable_pin = GPIO_NUM_NC;
+    }
+    if (!pin_valid_input(st.probe_pin)) {
+        ESP_LOGW(TAG, "Probe pin %d is not usable on this board, disabling", (int)st.probe_pin);
+        st.probe_pin = GPIO_NUM_NC;
+    }
+
     /* Default timing (overridden by NVS config below) */
     st.step_pulse_us = CFG_DEFAULT_STEP_PULSE_US;
     st.segment_complete = true;
@@ -387,8 +422,8 @@ void stepper_init(void)
 
     /* Configure step and direction GPIO pins as outputs (skip NC axes) */
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        bool has_step = pin_valid(st.step_pins[i]);
-        bool has_dir  = pin_valid(st.dir_pins[i]);
+        bool has_step = pin_valid_output(st.step_pins[i]);
+        bool has_dir  = pin_valid_output(st.dir_pins[i]);
         if (!has_step && !has_dir) continue;
 
         uint64_t mask = 0;
@@ -408,14 +443,16 @@ void stepper_init(void)
     }
 
     /* Configure enable pin */
-    gpio_config_t en_conf = {
-        .pin_bit_mask = (1ULL << st.enable_pin),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&en_conf);
+    if (pin_valid_output(st.enable_pin)) {
+        gpio_config_t en_conf = {
+            .pin_bit_mask = (1ULL << st.enable_pin),
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&en_conf);
+    }
     stepper_set_enabled(false);
 
     /* Create hardware timer */
@@ -653,7 +690,12 @@ void stepper_load_segment(const wcnc_motion_segment_t *seg)
     st.seg_flags = seg->flags;
     if (seg->flags & WCNC_SEG_FLAG_PROBE) {
         st.probe_triggered = false;
-        st.invert_probe = nvs_config_get_u8("inv_prb", CFG_DEFAULT_INVERT_PROBE);
+        if (!pin_valid_input(st.probe_pin)) {
+            ESP_LOGW(TAG, "Probe move requested but probe pin is not usable on this board, ignoring probe flag");
+            st.seg_flags &= (uint8_t)~WCNC_SEG_FLAG_PROBE;
+        } else {
+            st.invert_probe = nvs_config_get_u8("inv_prb", CFG_DEFAULT_INVERT_PROBE);
+        }
     }
 
     /* Start the timer */
@@ -757,7 +799,7 @@ void stepper_estop(void)
 
     /* Immediately disable all outputs (skip NC pins) */
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        if (pin_valid(st.step_pins[i]))
+        if (pin_valid_output(st.step_pins[i]))
             gpio_set_level(st.step_pins[i], 0);
     }
     stepper_set_enabled(false);
@@ -805,6 +847,7 @@ void stepper_feed_resume(void)
 
 void stepper_set_enabled(bool enabled)
 {
+    if (!pin_valid_output(st.enable_pin)) return;
     bool actual = enabled ^ (st.invert_enable & 1);
     gpio_set_level(st.enable_pin, actual ? 1 : 0);
 }
@@ -841,3 +884,5 @@ int32_t stepper_get_feed_rate(void)
 {
     return st.current_feed_rate;
 }
+
+
