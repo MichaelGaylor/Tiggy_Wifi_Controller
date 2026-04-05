@@ -122,9 +122,12 @@ static portMUX_TYPE s_stepper_mux = portMUX_INITIALIZER_UNLOCKED;
 static gptimer_handle_t step_timer = NULL;
 static volatile bool s_timer_running = false;
 
-/* Safe timer stop -- avoids calling gptimer_stop when already stopped */
+/* Safe timer stop -- avoids calling gptimer_stop when already stopped.
+ * Sets st.running=false first so the ISR bails out immediately if it
+ * fires during the stop, preventing spinlock deadlock. */
 static inline void timer_stop_safe(void)
 {
+    st.running = false;
     if (s_timer_running) {
         gptimer_stop(step_timer);
         s_timer_running = false;
@@ -212,7 +215,7 @@ static bool IRAM_ATTR stepper_timer_isr(gptimer_handle_t timer,
                                          const gptimer_alarm_event_data_t *edata,
                                          void *user_ctx)
 {
-    if (st.estopped || st.holding) {
+    if (!st.running || st.estopped || st.holding) {
         return false;
     }
 
