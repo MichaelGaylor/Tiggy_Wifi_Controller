@@ -550,8 +550,11 @@ void stepper_apply_axis_config(void)
 
 void stepper_load_segment(const wcnc_motion_segment_t *seg)
 {
-    /* Stop timer while configuring new segment */
-    timer_stop_safe();
+    /* Mark not running so ISR skips out immediately.
+     * Do NOT stop the timer here -- calling gptimer_stop from the task
+     * while the ISR might be inside gptimer_set_alarm_action causes a
+     * spinlock deadlock (both take the internal gptimer lock). */
+    st.running = false;
 
     /* Determine dominant axis (most steps) */
     uint32_t max_steps = 0;
@@ -720,21 +723,30 @@ void stepper_load_segment(const wcnc_motion_segment_t *seg)
         }
     }
 
-    /* Start the timer */
+    /* Prepare timing state */
     st.current_interval = st.initial_interval;
     st.segment_complete = false;
-    st.running = true;
     st.jog_mode = false;
 
-    /* Reset and start timer with initial alarm */
-    gptimer_set_raw_count(step_timer, 0);
+    /* Stop timer briefly to reconfigure alarm safely.
+     * st.running is already false so ISR will not call gptimer_set_alarm_action
+     * even if it fires between stop and start. */
+    if (s_timer_running) {
+        gptimer_stop(step_timer);
+        s_timer_running = false;
+    }
 
+    gptimer_set_raw_count(step_timer, 0);
     gptimer_alarm_config_t alarm = {
         .alarm_count = st.initial_interval,
         .flags.auto_reload_on_alarm = false,
     };
     gptimer_set_alarm_action(step_timer, &alarm);
-    timer_start_safe();
+
+    /* Now safe to enable running and start timer */
+    st.running = true;
+    gptimer_start(step_timer);
+    s_timer_running = true;
 
     /* Enable stepper drivers */
     stepper_set_enabled(true);
