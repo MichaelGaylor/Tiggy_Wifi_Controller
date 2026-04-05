@@ -1009,24 +1009,34 @@ $J=G21 G91 Z-5 F200    <span class="comment">// Jog Z -5mm in metric</span>
 </p>
 
 <table>
-  <tr><th>$N</th><th>NVS Key</th><th>Description</th><th>Conversion</th></tr>
-  <tr><td>$0</td><td><code>pulse_us</code></td><td>Step pulse time (us)</td><td>None</td></tr>
-  <tr><td>$1</td><td><code>idle_ms</code></td><td>Step idle delay (ms)</td><td>None</td></tr>
-  <tr><td>$2</td><td><code>inv_step</code></td><td>Step port invert mask</td><td>None</td></tr>
-  <tr><td>$3</td><td><code>inv_dir</code></td><td>Dir port invert mask</td><td>None</td></tr>
-  <tr><td>$5</td><td><code>inv_lim</code></td><td>Limit pin invert mask</td><td>None</td></tr>
-  <tr><td>$6</td><td><code>inv_prb</code></td><td>Probe pin invert</td><td>None</td></tr>
-  <tr><td>$11</td><td><code>junc_dev</code></td><td>Junction deviation (mm)</td><td>None</td></tr>
-  <tr><td>$12</td><td><code>arc_tol</code></td><td>Arc tolerance (mm)</td><td>None</td></tr>
-  <tr><td>$23</td><td><code>hm_dir</code></td><td>Homing dir invert mask</td><td>None</td></tr>
-  <tr><td>$24</td><td><code>hm_feed</code></td><td>Homing feed (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
-  <tr><td>$25</td><td><code>hm_seek</code></td><td>Homing seek (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
-  <tr><td>$27</td><td><code>hm_pull</code></td><td>Homing pull-off (mm)</td><td>mm &rarr; steps</td></tr>
-  <tr><td>$100-$105</td><td><code>spm_x..spm_c</code></td><td>Steps/mm per axis</td><td>None (float)</td></tr>
-  <tr><td>$110-$115</td><td><code>rate_x..rate_c</code></td><td>Max rate (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
-  <tr><td>$120-$125</td><td><code>acc_x..acc_c</code></td><td>Accel (mm/sec&sup2;)</td><td>mm/sec&sup2; &rarr; steps/sec&sup2;</td></tr>
-  <tr><td>$130-$132</td><td><code>trvl_x..trvl_z</code></td><td>Max travel (mm)</td><td>None</td></tr>
-  <tr><td>$40</td><td><code>jerk_max</code></td><td>Max jerk (mm/sec&sup3;)</td><td>None (float). 0 = trapezoidal.</td></tr>
+  <tr><th>$N</th><th>NVS Key</th><th>Default</th><th>Description</th><th>Conversion</th></tr>
+  <tr><td>$0</td><td><code>pulse_us</code></td><td>3</td><td>Step pulse time (&micro;s)</td><td>None</td></tr>
+  <tr><td>$1</td><td><code>idle_ms</code></td><td>255</td><td>Step idle delay (ms). 255 = never disable.</td><td>None</td></tr>
+  <tr><td>$2</td><td><code>inv_step</code></td><td>0</td><td>Step port invert mask (6-bit, bit 0=X)</td><td>None</td></tr>
+  <tr><td>$3</td><td><code>inv_dir</code></td><td>0</td><td>Dir port invert mask (6-bit, bit 0=X)</td><td>None</td></tr>
+  <tr><td>$4</td><td><code>inv_en</code></td><td>0</td><td>Enable pin invert (0=active high, 1=active low)</td><td>None</td></tr>
+  <tr><td>$5</td><td><code>inv_lim</code></td><td>63</td><td>Limit pin invert mask (6-bit). 63 = all inverted for NO switches.</td><td>None</td></tr>
+  <tr><td>$6</td><td><code>inv_probe</code></td><td>0</td><td>Probe pin invert (0=active low)</td><td>None</td></tr>
+  <tr><td>$10</td><td><code>stat_ms</code></td><td>50</td><td>Status report interval (ms)</td><td>None</td></tr>
+  <tr><td>$11</td><td><code>junc_dev</code></td><td>0.01</td><td>Junction deviation (mm)</td><td>None (float)</td></tr>
+  <tr><td>$12</td><td><code>arc_tol</code></td><td>0.002</td><td>Arc tolerance (mm)</td><td>None (float)</td></tr>
+  <tr><td>$13</td><td><code>rpt_inch</code></td><td>0</td><td>Report in inches (0=mm, 1=inches)</td><td>None</td></tr>
+  <tr><td>$20</td><td><code>soft_lim</code></td><td>0</td><td>Soft limits enable (0=off, 1=on)</td><td>None</td></tr>
+  <tr><td>$21</td><td><code>hard_lim</code></td><td>0</td><td>Hard limits enable (0=off, 1=on)</td><td>None</td></tr>
+  <tr><td>$22</td><td><code>hm_en</code></td><td>1</td><td>Homing cycle enable (0=off, 1=on)</td><td>None</td></tr>
+  <tr><td>$23</td><td><code>hm_dir</code></td><td>0</td><td>Homing dir invert mask (6-bit). 0 = home toward negative.</td><td>None</td></tr>
+  <tr><td>$24</td><td><code>hm_feed</code></td><td>37.5</td><td>Homing locate feed rate (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
+  <tr><td>$25</td><td><code>hm_seek</code></td><td>375</td><td>Homing search seek rate (mm/min)</td><td>mm/min &rarr; steps/sec</td></tr>
+  <tr><td>$26</td><td><code>hm_dbnc</code></td><td>5</td><td>Homing switch debounce delay (ms)</td><td>None</td></tr>
+  <tr><td>$27</td><td><code>hm_pull</code></td><td>1.0</td><td>Homing switch pull-off distance (mm)</td><td>mm &rarr; steps</td></tr>
+  <tr><td>$30</td><td><code>sp_rpm</code></td><td>24000</td><td>Max spindle speed (RPM). Maps S value to 100% PWM.</td><td>None</td></tr>
+  <tr><td>$31</td><td><code>sp_min</code></td><td>0</td><td>Min spindle speed (RPM). Below this, spindle off.</td><td>None</td></tr>
+  <tr><td>$32</td><td><code>laser_en</code></td><td>0</td><td>Laser mode (0=off, 1=on). PWM scales with feed rate.</td><td>None</td></tr>
+  <tr><td>$40</td><td><code>jerk_max</code></td><td>1000</td><td>Max jerk (mm/sec&sup3;). 0 = trapezoidal fallback (no S-curve).</td><td>None (float)</td></tr>
+  <tr><td>$100-$105</td><td><code>spm_x..spm_c</code></td><td>800</td><td>Steps/mm per axis (X through C)</td><td>None (float)</td></tr>
+  <tr><td>$110-$115</td><td><code>rate_x..rate_c</code></td><td>500</td><td>Max rate per axis (mm/min)</td><td>mm/min &rarr; steps/sec (float)</td></tr>
+  <tr><td>$120-$125</td><td><code>acc_x..acc_c</code></td><td>50</td><td>Acceleration per axis (mm/sec&sup2;)</td><td>mm/sec&sup2; &rarr; steps/sec&sup2; (float)</td></tr>
+  <tr><td>$130-$132</td><td><code>trvl_x..trvl_z</code></td><td>200</td><td>Max travel per axis (mm). Used for soft limits.</td><td>None (float)</td></tr>
 </table>
 
 <div class="warning">

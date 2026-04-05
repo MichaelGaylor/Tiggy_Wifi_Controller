@@ -67,6 +67,13 @@ static const setting_map_t settings[] = {
     { 11,  "junc_dev",  STYPE_FLOAT,  CONV_NONE, -1, 0.01f },
     { 12,  "arc_tol",   STYPE_FLOAT,  CONV_NONE, -1, 0.002f },
     { 13,  "rpt_inch",  STYPE_UINT8,  CONV_NONE, -1, 0 },
+
+    /* Spindle */
+    { 30,  "sp_rpm",    STYPE_UINT32, CONV_NONE, -1, 24000.0f },
+    { 31,  "sp_min",    STYPE_UINT32, CONV_NONE, -1, 0.0f },
+    { 32,  "laser_en",  STYPE_UINT8,  CONV_NONE, -1, 0 },
+
+    /* Jerk (S-curve) */
     { 40,  "jerk_max",  STYPE_FLOAT,  CONV_NONE, -1, 1000.0f },
 
     /* Limits / homing */
