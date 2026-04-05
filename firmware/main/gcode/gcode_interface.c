@@ -596,6 +596,29 @@ int gcode_format_status_report(char *buf, size_t buf_size)
     uint16_t ring_avail = planner_available();
     uint8_t plan_avail = gcode_planner_available(&s_planner);
 
+    /* Accessories field (A:SCF for spindle CW, CCW, flood, mist) */
+    char acc_str[16] = "";
+    {
+        char *p = acc_str;
+        bool any = false;
+        if (s_state.spindle == 3) { /* M3 = CW */
+            if (!any) { *p++ = '|'; *p++ = 'A'; *p++ = ':'; any = true; }
+            *p++ = 'S';
+        } else if (s_state.spindle == 4) { /* M4 = CCW */
+            if (!any) { *p++ = '|'; *p++ = 'A'; *p++ = ':'; any = true; }
+            *p++ = 'C';
+        }
+        if (s_state.coolant == 8) { /* Flood (M8) */
+            if (!any) { *p++ = '|'; *p++ = 'A'; *p++ = ':'; any = true; }
+            *p++ = 'F';
+        }
+        if (s_state.coolant == 7) { /* Mist (M7) */
+            if (!any) { *p++ = '|'; *p++ = 'A'; *p++ = ':'; any = true; }
+            *p++ = 'M';
+        }
+        *p = '\0';
+    }
+
     /* Actual spindle RPM suffix (only when encoder available) */
     char rpm_str[16] = "";
     if (spindle_encoder_is_available()) {
@@ -611,13 +634,13 @@ int gcode_format_status_report(char *buf, size_t buf_size)
             "<%s|MPos:%.3f,%.3f,%.3f,%.3f,%.3f,%.3f"
             "|FS:%.0f,%.0f"
             "|Bf:%u,%u"
-            "%s"
+            "%s%s"
             "|WCO:%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\r\n",
             state_name,
             mpos[0], mpos[1], mpos[2], mpos[3], mpos[4], mpos[5],
             feed_mm_min, s_state.spindle_speed,
             ring_avail, plan_avail,
-            rpm_str,
+            acc_str, rpm_str,
             wcs[0] + s_state.g92_offset[0],
             wcs[1] + s_state.g92_offset[1],
             wcs[2] + s_state.g92_offset[2],
@@ -630,12 +653,12 @@ int gcode_format_status_report(char *buf, size_t buf_size)
             "<%s|MPos:%.3f,%.3f,%.3f,%.3f,%.3f,%.3f"
             "|FS:%.0f,%.0f"
             "|Bf:%u,%u"
-            "%s>\r\n",
+            "%s%s>\r\n",
             state_name,
             mpos[0], mpos[1], mpos[2], mpos[3], mpos[4], mpos[5],
             feed_mm_min, s_state.spindle_speed,
             ring_avail, plan_avail,
-            rpm_str);
+            acc_str, rpm_str);
         s_wco_counter--;
     }
 
