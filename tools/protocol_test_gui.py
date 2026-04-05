@@ -492,11 +492,13 @@ class WiFiCNCTester:
         ttk.Label(hdr, text="Steps/mm", style="Header.TLabel", width=12).pack(side="left", padx=4)
         ttk.Label(hdr, text="Max Rate", style="Header.TLabel", width=12).pack(side="left", padx=4)
         ttk.Label(hdr, text="Accel", style="Header.TLabel", width=12).pack(side="left", padx=4)
+        ttk.Label(hdr, text="Max", style="Header.TLabel", width=8).pack(side="left", padx=4)
 
         # Per-axis entries
         self.axis_spm_vars = []   # Steps/mm (float)
-        self.axis_rate_vars = []  # Max rate (uint32)
-        self.axis_accel_vars = [] # Acceleration (uint32)
+        self.axis_rate_vars = []  # Max rate (mm/min, displayed)
+        self.axis_accel_vars = [] # Acceleration (mm/sec^2, displayed)
+        self.axis_max_labels = [] # Max allowed rate labels
 
         for name in AXIS_NAMES:
             row = ttk.Frame(axis_frame, style="TFrame")
@@ -508,15 +510,20 @@ class WiFiCNCTester:
                       font=("Consolas", 10)).pack(side="left", padx=4)
             self.axis_spm_vars.append(spm_var)
 
-            rate_var = tk.StringVar(value="20000")
+            rate_var = tk.StringVar(value="500.0")
             ttk.Entry(row, textvariable=rate_var, width=12,
                       font=("Consolas", 10)).pack(side="left", padx=4)
             self.axis_rate_vars.append(rate_var)
 
-            accel_var = tk.StringVar(value="5000")
+            accel_var = tk.StringVar(value="50.0")
             ttk.Entry(row, textvariable=accel_var, width=12,
                       font=("Consolas", 10)).pack(side="left", padx=4)
             self.axis_accel_vars.append(accel_var)
+
+            max_lbl = ttk.Label(row, text="", style="TLabel", width=8,
+                                foreground="#888888")
+            max_lbl.pack(side="left", padx=4)
+            self.axis_max_labels.append(max_lbl)
 
         axis_btns = ttk.Frame(axis_frame, style="TFrame")
         axis_btns.pack(fill="x", padx=8, pady=(4, 8))
@@ -524,7 +531,7 @@ class WiFiCNCTester:
                     command=self._on_axis_config_read).pack(side="left", padx=2)
         ttk.Button(axis_btns, text="Write & Save",
                     command=self._on_axis_config_write).pack(side="left", padx=2)
-        ttk.Label(axis_btns, text="stp/mm | stp/s | stp/s\u00b2",
+        ttk.Label(axis_btns, text="stp/mm | mm/min | mm/s\u00b2 | max mm/min",
                   style="TLabel", foreground="#888888").pack(side="left", padx=8)
 
         # Timing Parameters
@@ -1589,21 +1596,34 @@ class WiFiCNCTester:
         try:
             with self.tcp_lock:
                 for i in range(MAX_AXES):
-                    # Steps/mm (float)
+                    # Steps/mm (float) - read first, needed for conversions
+                    spm = 800.0
                     vtype, vdata = send_config_get(self.tcp_sock, SPM_KEYS[i])
                     if vtype is not None and vtype == VAL_FLOAT:
-                        val = struct.unpack_from('<f', bytes(vdata))[0]
-                        self.root.after(0, self.axis_spm_vars[i].set, f"{val:.1f}")
-                    # Max rate (uint32)
+                        spm = struct.unpack_from('<f', bytes(vdata))[0]
+                        self.root.after(0, self.axis_spm_vars[i].set, f"{spm:.1f}")
+                    # Max rate (float steps/sec -> mm/min)
                     vtype, vdata = send_config_get(self.tcp_sock, RATE_KEYS[i])
                     if vtype is not None:
-                        val = struct.unpack_from('<I', bytes(vdata))[0]
-                        self.root.after(0, self.axis_rate_vars[i].set, str(val))
-                    # Accel (uint32)
+                        if vtype == VAL_FLOAT:
+                            val_sps = struct.unpack_from('<f', bytes(vdata))[0]
+                        else:
+                            val_sps = float(struct.unpack_from('<I', bytes(vdata))[0])
+                        mm_min = (val_sps / spm) * 60.0 if spm > 0 else 0
+                        self.root.after(0, self.axis_rate_vars[i].set, f"{mm_min:.1f}")
+                    # Accel (float steps/sec^2 -> mm/sec^2)
                     vtype, vdata = send_config_get(self.tcp_sock, ACCEL_KEYS[i])
                     if vtype is not None:
-                        val = struct.unpack_from('<I', bytes(vdata))[0]
-                        self.root.after(0, self.axis_accel_vars[i].set, str(val))
+                        if vtype == VAL_FLOAT:
+                            val_sps2 = struct.unpack_from('<f', bytes(vdata))[0]
+                        else:
+                            val_sps2 = float(struct.unpack_from('<I', bytes(vdata))[0])
+                        mm_sec2 = val_sps2 / spm if spm > 0 else 0
+                        self.root.after(0, self.axis_accel_vars[i].set, f"{mm_sec2:.1f}")
+                    # Show max allowed rate (250000 steps/sec limit)
+                    max_mm_min = (250000.0 / spm) * 60.0 if spm > 0 else 0
+                    self.root.after(0, self.axis_max_labels[i].configure,
+                                   {"text": f"{max_mm_min:.0f}"})
             self.root.after(0, self._log, "Axis config read (18 keys)", "success")
         except Exception as e:
             self.root.after(0, self._log, f"Axis config read error: {e}", "error")
@@ -1622,12 +1642,16 @@ class WiFiCNCTester:
                     if not send_config_set(self.tcp_sock, SPM_KEYS[i], spm, VAL_FLOAT):
                         self.root.after(0, self._log, f"Failed to set steps/mm {AXIS_NAMES[i]}", "error")
                         return
-                    rate = int(self.axis_rate_vars[i].get())
-                    if not send_config_set(self.tcp_sock, RATE_KEYS[i], rate, VAL_UINT32):
+                    # Convert mm/min -> steps/sec (float)
+                    rate_mm_min = float(self.axis_rate_vars[i].get())
+                    rate_sps = (rate_mm_min / 60.0) * spm
+                    if not send_config_set(self.tcp_sock, RATE_KEYS[i], rate_sps, VAL_FLOAT):
                         self.root.after(0, self._log, f"Failed to set max rate {AXIS_NAMES[i]}", "error")
                         return
-                    accel = int(self.axis_accel_vars[i].get())
-                    if not send_config_set(self.tcp_sock, ACCEL_KEYS[i], accel, VAL_UINT32):
+                    # Convert mm/sec^2 -> steps/sec^2 (float)
+                    accel_mm = float(self.axis_accel_vars[i].get())
+                    accel_sps2 = accel_mm * spm
+                    if not send_config_set(self.tcp_sock, ACCEL_KEYS[i], accel_sps2, VAL_FLOAT):
                         self.root.after(0, self._log, f"Failed to set accel {AXIS_NAMES[i]}", "error")
                         return
                 if send_config_save(self.tcp_sock):
