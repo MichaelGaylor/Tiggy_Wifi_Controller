@@ -24,6 +24,22 @@
 #include "driver/gptimer.h"
 #include "driver/gpio.h"
 #include "hal/gpio_ll.h"
+#include "hal/timer_ll.h"
+#include "hal/timer_hal.h"
+#include "soc/timer_group_struct.h"
+
+/* Access gptimer internal struct to extract hardware pointers for
+ * lock-free ISR alarm updates. This avoids the spinlock deadlock
+ * between gptimer_set_alarm_action (ISR) and gptimer_stop (task). */
+typedef struct {
+    void *group;
+    int timer_id;
+    uint32_t resolution_hz;
+    uint64_t reload_count;
+    uint64_t alarm_count;
+    int direction;
+    timer_hal_context_t hal;
+} gptimer_internal_t;
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "rom/ets_sys.h"
@@ -121,6 +137,13 @@ static DRAM_ATTR stepper_state_t st;
 static portMUX_TYPE s_stepper_mux = portMUX_INITIALIZER_UNLOCKED;
 static gptimer_handle_t step_timer = NULL;
 static volatile bool s_timer_running = false;
+
+/* Hardware timer pointers for lock-free ISR alarm updates.
+ * gptimer_set_alarm_action() takes a spinlock that conflicts with
+ * gptimer_stop() -- using timer_ll directly avoids the deadlock.
+ * Resolved at init time from the gptimer handle. */
+static DRAM_ATTR timg_dev_t *s_timer_hw = NULL;
+static DRAM_ATTR int s_timer_id = 0;
 
 /* Safe timer stop -- avoids calling gptimer_stop when already stopped.
  * Sets st.running=false first so the ISR bails out immediately if it
@@ -372,12 +395,12 @@ static bool IRAM_ATTR stepper_timer_isr(gptimer_handle_t timer,
         st.current_feed_rate = (int32_t)(CFG_STEPPER_TIMER_RESOLUTION_HZ / next_interval);
     }
 
-    /* Schedule next alarm */
-    gptimer_alarm_config_t alarm_config = {
-        .alarm_count = edata->alarm_value + next_interval,
-        .flags.auto_reload_on_alarm = false,
-    };
-    gptimer_set_alarm_action(timer, &alarm_config);
+    /* Schedule next alarm using direct LL writes (no spinlock).
+     * gptimer_set_alarm_action() takes a spinlock that deadlocks with
+     * gptimer_stop() when called from different contexts. */
+    timer_ll_set_alarm_value(s_timer_hw, s_timer_id,
+                             edata->alarm_value + next_interval);
+    timer_ll_enable_alarm(s_timer_hw, s_timer_id, true);
 
     return false;
 }
@@ -484,6 +507,14 @@ void stepper_init(void)
         .resolution_hz = CFG_STEPPER_TIMER_RESOLUTION_HZ,
     };
     ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &step_timer));
+
+    /* Extract hardware pointers for lock-free ISR alarm updates */
+    {
+        gptimer_internal_t *internal = (gptimer_internal_t *)step_timer;
+        s_timer_hw = (timg_dev_t *)internal->hal.dev;
+        s_timer_id = internal->timer_id;
+        ESP_LOGI(TAG, "Timer HW: dev=%p id=%d", s_timer_hw, s_timer_id);
+    }
 
     /* Register ISR callback */
     gptimer_event_callbacks_t cbs = {
