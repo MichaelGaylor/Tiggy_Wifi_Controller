@@ -120,6 +120,25 @@ typedef struct {
 static DRAM_ATTR stepper_state_t st;
 static portMUX_TYPE s_stepper_mux = portMUX_INITIALIZER_UNLOCKED;
 static gptimer_handle_t step_timer = NULL;
+static volatile bool s_timer_running = false;
+
+/* Safe timer stop -- avoids calling gptimer_stop when already stopped */
+static inline void timer_stop_safe(void)
+{
+    if (s_timer_running) {
+        gptimer_stop(step_timer);
+        s_timer_running = false;
+    }
+}
+
+/* Safe timer start */
+static inline void timer_start_safe(void)
+{
+    if (!s_timer_running) {
+        gptimer_start(step_timer);
+        s_timer_running = true;
+    }
+}
 
 /* ===================================================================
  * GPIO Helpers - Direct register writes for speed
@@ -529,7 +548,7 @@ void stepper_apply_axis_config(void)
 void stepper_load_segment(const wcnc_motion_segment_t *seg)
 {
     /* Stop timer while configuring new segment */
-    gptimer_stop(step_timer);
+    timer_stop_safe();
 
     /* Determine dominant axis (most steps) */
     uint32_t max_steps = 0;
@@ -712,7 +731,7 @@ void stepper_load_segment(const wcnc_motion_segment_t *seg)
         .flags.auto_reload_on_alarm = false,
     };
     gptimer_set_alarm_action(step_timer, &alarm);
-    gptimer_start(step_timer);
+    timer_start_safe();
 
     /* Enable stepper drivers */
     stepper_set_enabled(true);
@@ -726,7 +745,7 @@ void stepper_start_jog(uint8_t axis, int8_t direction, uint32_t speed_steps_per_
 {
     if (axis >= WCNC_MAX_AXES || st.estopped) return;
 
-    gptimer_stop(step_timer);
+    timer_stop_safe();
 
     /* Configure for single-axis continuous motion */
     memset(st.segment_steps, 0, sizeof(st.segment_steps));
@@ -769,7 +788,7 @@ void stepper_start_jog(uint8_t axis, int8_t direction, uint32_t speed_steps_per_
         .flags.auto_reload_on_alarm = false,
     };
     gptimer_set_alarm_action(step_timer, &alarm);
-    gptimer_start(step_timer);
+    timer_start_safe();
 
     stepper_set_enabled(true);
 }
@@ -777,7 +796,7 @@ void stepper_start_jog(uint8_t axis, int8_t direction, uint32_t speed_steps_per_
 void stepper_stop_jog(void)
 {
     if (st.jog_mode) {
-        gptimer_stop(step_timer);
+        timer_stop_safe();
         st.running = false;
         st.segment_complete = true;
         st.jog_mode = false;
@@ -792,7 +811,7 @@ void stepper_stop_jog(void)
 void stepper_estop(void)
 {
     st.estopped = true;
-    gptimer_stop(step_timer);
+    timer_stop_safe();
     st.running = false;
     st.segment_complete = true;
     st.current_feed_rate = 0;
@@ -839,7 +858,7 @@ void stepper_feed_resume(void)
                 .flags.auto_reload_on_alarm = false,
             };
             gptimer_set_alarm_action(step_timer, &alarm);
-            gptimer_start(step_timer);
+            timer_start_safe();
         }
         ESP_LOGI(TAG, "Feed hold released");
     }
