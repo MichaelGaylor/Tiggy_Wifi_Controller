@@ -54,7 +54,7 @@ from protocol_test import (
     CFG_PIN_ENCODER_A, CFG_PIN_ENCODER_B, CFG_PIN_ENCODER_INDEX,
     CFG_ENCODER_PPR, CFG_ENCODER_MODE, CFG_ENCODER_FILTER_NS,
     CFG_PIN_MISC_IN0, CFG_PIN_MISC_IN1, CFG_PIN_MISC_IN2, CFG_PIN_MISC_IN3,
-    CFG_DEVICE_MODE,
+    CFG_DEVICE_MODE, CFG_MACHINE_LAYOUT,
     CFG_IO_PIN_COUNT, CFG_IO_DIR_MASK, CFG_IO_PULLUP_MASK, CFG_IO_INVERT_MASK,
     CFG_IO_PIN_BASE,
     CFG_PIN_ETH_MOSI, CFG_PIN_ETH_MISO, CFG_PIN_ETH_SCLK,
@@ -593,8 +593,18 @@ class WiFiCNCTester:
                   style="TLabel", foreground="#888888").pack(side="left", padx=8)
 
         # Encoder Parameters
-        enc_frame = ttk.LabelFrame(parent, text=" Spindle Encoder ", style="TFrame")
+        enc_frame = ttk.LabelFrame(parent, text=" Terminals and Spindle Sensor ", style="TFrame")
         enc_frame.pack(fill="x", padx=4, pady=4)
+
+        lay_row = ttk.Frame(enc_frame, style="TFrame")
+        lay_row.pack(fill="x", **pad)
+        ttk.Label(lay_row, text="Axis terminals:", style="TLabel").pack(side="left")
+        self.layout_var = tk.StringVar(value="Six axes")
+        ttk.Combobox(lay_row, textvariable=self.layout_var,
+                      values=["Six axes", "Four axes"], width=14, state="readonly",
+                      font=("Consolas", 10)).pack(side="left", padx=(2, 10))
+        ttk.Label(lay_row, text="Four axes: X, Y, Z, A; the B and C terminals take the sensor and more I/O",
+                  style="TLabel", foreground="#888888").pack(side="left", padx=8)
 
         enc_row = ttk.Frame(enc_frame, style="TFrame")
         enc_row.pack(fill="x", **pad)
@@ -607,7 +617,7 @@ class WiFiCNCTester:
         ttk.Label(enc_row, text="Mode:", style="TLabel").pack(side="left")
         self.enc_mode_var = tk.StringVar(value="Quadrature")
         ttk.Combobox(enc_row, textvariable=self.enc_mode_var,
-                      values=["Quadrature", "Index-only"], width=12, state="readonly",
+                      values=["Quadrature", "Quadrature, no index", "One pulse/rev"], width=20, state="readonly",
                       font=("Consolas", 10)).pack(side="left", padx=(2, 10))
 
         ttk.Label(enc_row, text="Filter (ns):", style="TLabel").pack(side="left")
@@ -621,7 +631,7 @@ class WiFiCNCTester:
                     command=self._on_encoder_read).pack(side="left", padx=2)
         ttk.Button(enc_btns, text="Write & Save",
                     command=self._on_encoder_write).pack(side="left", padx=2)
-        ttk.Label(enc_btns, text="PPR=0 disables encoder. Pins on Pins tab.",
+        ttk.Label(enc_btns, text="PPR=0: no sensor. Quadrature: PPR = lines. The controller restarts on a change.",
                   style="TLabel", foreground="#888888").pack(side="left", padx=8)
 
         # I/O Module Config
@@ -1767,12 +1777,18 @@ class WiFiCNCTester:
                 if vtype is not None:
                     val = struct.unpack_from('<H', bytes(vdata))[0]
                     self.root.after(0, self.enc_ppr_var.set, str(val))
-                # Mode (uint8: 0=quadrature, 1=index-only)
+                # Mode (uint8: 0=quadrature with index, 1=one pulse per revolution, 2=quadrature without index)
                 vtype, vdata = send_config_get(self.tcp_sock, CFG_ENCODER_MODE)
                 if vtype is not None:
                     mode = vdata[0]
                     self.root.after(0, self.enc_mode_var.set,
-                                    "Index-only" if mode == 1 else "Quadrature")
+                                    "One pulse/rev" if mode == 1 else
+                                    "Quadrature, no index" if mode == 2 else "Quadrature")
+                # What the axis terminals are used for (uint8: 0=six axes, 1=four axes)
+                vtype, vdata = send_config_get(self.tcp_sock, CFG_MACHINE_LAYOUT)
+                if vtype is not None:
+                    self.root.after(0, self.layout_var.set,
+                                    "Four axes" if vdata[0] == 1 else "Six axes")
                 # Filter (uint16)
                 vtype, vdata = send_config_get(self.tcp_sock, CFG_ENCODER_FILTER_NS)
                 if vtype is not None:
@@ -1795,9 +1811,13 @@ class WiFiCNCTester:
                 if not send_config_set(self.tcp_sock, CFG_ENCODER_PPR, ppr, VAL_UINT16):
                     self.root.after(0, self._log, "Failed to set encoder PPR", "error")
                     return
-                mode = 1 if self.enc_mode_var.get() == "Index-only" else 0
+                mode = {"One pulse/rev": 1, "Quadrature, no index": 2}.get(self.enc_mode_var.get(), 0)
                 if not send_config_set(self.tcp_sock, CFG_ENCODER_MODE, mode, VAL_UINT8):
                     self.root.after(0, self._log, "Failed to set encoder mode", "error")
+                    return
+                layout = 1 if self.layout_var.get() == "Four axes" else 0
+                if not send_config_set(self.tcp_sock, CFG_MACHINE_LAYOUT, layout, VAL_UINT8):
+                    self.root.after(0, self._log, "Failed to set the machine layout", "error")
                     return
                 filt = int(self.enc_filter_var.get())
                 if not send_config_set(self.tcp_sock, CFG_ENCODER_FILTER_NS, filt, VAL_UINT16):
@@ -1805,7 +1825,7 @@ class WiFiCNCTester:
                     return
                 if send_config_save(self.tcp_sock):
                     self.root.after(0, self._log,
-                                    "Encoder config saved (reboot to apply)", "success")
+                                    "Spindle sensor and layout saved (the controller restarts if they changed)", "success")
                 else:
                     self.root.after(0, self._log, "Config save failed", "error")
         except Exception as e:

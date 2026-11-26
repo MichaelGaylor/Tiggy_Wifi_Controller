@@ -32,6 +32,10 @@
  *            motion and switches its outputs off.
  *          - Jog deadman, ramped jog, self-contained home command,
  *            discovery request/response.
+ *          - Spindle-synchronised segments (WCNC_SEG_FLAG_SPINDLE_SYNC), for
+ *            screw cutting on a lathe: a device with a spindle sensor
+ *            advertises WCNC_CAP_SPINDLE_SYNC and plays such segments by the
+ *            angle the spindle has turned through instead of by the clock.
  */
 
 #ifndef WIFI_CNC_PROTOCOL_H
@@ -166,7 +170,38 @@ typedef enum {
                                               steps each time its accumulated position passes a
                                               whole step; the accumulator starts half-way
                                               (WCNC_SUBSTEP_SCALE / 2) on a new stream. */
+#define WCNC_SEG_FLAG_SPINDLE_SYNC  0x40   /* v1.2, with TIMED, devices with
+                                              WCNC_CAP_SPINDLE_SYNC: play the segment in step
+                                              with the spindle.  The host plans the move for a
+                                              spindle speed of its choosing (the reference) and
+                                              puts that speed, in 1/1000 rpm, in 'acceleration'.
+                                              The device then advances through the segment by
+                                              the angle the spindle really turns: one revolution
+                                              plays 60 s / reference speed of the segment, so
+                                              the axes keep their place on the work whatever
+                                              the spindle's speed does, and stand still if it
+                                              stops.  Consecutive segments with this flag and
+                                              the same reference form one run, with no slip
+                                              between them.  A run is played in step with the
+                                              spindle or not at all: if a stop breaks into it,
+                                              the queue runs dry in it or the axes cannot keep
+                                              up, the device stops and drops the rest of the
+                                              stream (WCNC_STREAM_SYNC_LOST).  Only the tail of
+                                              a run - the end of the stream, flagged
+                                              WCNC_SEG_FLAG_LAST, arriving a moment late - is
+                                              still finished, by the clock.  So a host keeps a
+                                              run supplied, and ends it either with more
+                                              segments or with WCNC_SEG_FLAG_LAST. */
+#define WCNC_SEG_FLAG_INDEX_START   0x80   /* v1.2, with SPINDLE_SYNC: this segment begins a
+                                              new run, and the run begins as the spindle next
+                                              passes its index position.  Every run started
+                                              this way puts the axes at the same place for the
+                                              same angle of the spindle, which is what makes
+                                              successive passes of a thread line up.  Without
+                                              this flag a run begins at once, wherever the
+                                              spindle happens to be. */
 #define WCNC_SUBSTEP_SCALE          256
+#define WCNC_SYNC_MIN_MILLI_RPM     4000   /* lowest reference speed a device accepts (4 rpm) */
 
 /* ===================================================================
  * Motion Packet Flags (wcnc_motion_packet_t.flags, v1.2)
@@ -224,6 +259,16 @@ typedef enum {
                                               probe; position_steps is the contact position */
 #define WCNC_STREAM_UNDERRUN        0x02   /* Queue ran dry while a sequenced stream was moving */
 #define WCNC_STREAM_FLUSHING        0x04   /* Decelerating before a flush completes */
+#define WCNC_STREAM_WAIT_INDEX      0x08   /* Holding a WCNC_SEG_FLAG_INDEX_START segment until
+                                              the spindle passes its index position */
+#define WCNC_STREAM_SPINDLE_SYNC    0x10   /* Playing in step with the spindle */
+#define WCNC_STREAM_SYNC_LOST       0x20   /* A run played in step with the spindle was broken
+                                              into (feed hold or flush in the middle of it, the
+                                              queue ran dry, the axes fell behind the spindle).
+                                              The device has stopped and dropped what was left
+                                              of the stream, as after WCNC_STREAM_PROBE_TRIPPED;
+                                              position_steps is where it stopped.  Set until
+                                              the next flush. */
 
 /* ===================================================================
  * Capability Flags (reported in handshake)
@@ -237,6 +282,10 @@ typedef enum {
 #define WCNC_CAP_IO_MODULE         0x20   /* Running in I/O expansion module mode */
 #define WCNC_CAP_STREAM_V2         0x40   /* v1.2: timed segments, sequenced streams, stream
                                              flush, host watchdog, ramped jog, discovery */
+#define WCNC_CAP_SPINDLE_SYNC      0x80   /* v1.2: plays WCNC_SEG_FLAG_SPINDLE_SYNC segments
+                                             (has a working spindle sensor that tells where in
+                                             the revolution the spindle is: an encoder, or a
+                                             single sensor giving one pulse per revolution) */
 
 /* ===================================================================
  * Configuration Keys
@@ -346,8 +395,13 @@ typedef enum {
     WCNC_CFG_PIN_ENCODER_A      = 0x0520,  /* uint8: GPIO for quadrature channel A */
     WCNC_CFG_PIN_ENCODER_B      = 0x0521,  /* uint8: GPIO for quadrature channel B */
     WCNC_CFG_PIN_ENCODER_INDEX  = 0x0522,  /* uint8: GPIO for index pulse (0xFF=none) */
-    WCNC_CFG_ENCODER_PPR        = 0x0523,  /* uint16: pulses per revolution */
-    WCNC_CFG_ENCODER_MODE       = 0x0524,  /* uint8: 0=quadrature, 1=index-only */
+    WCNC_CFG_ENCODER_PPR        = 0x0523,  /* uint16: pulses per revolution (per channel) */
+    WCNC_CFG_ENCODER_MODE       = 0x0524,  /* uint8: 0=quadrature encoder on A and B, with an
+                                              index pulse if its pin is set; 1=single sensor on
+                                              the index pin, giving PPR pulses per revolution
+                                              (1 for screw cutting: with more, only the speed
+                                              is measured); 2=quadrature encoder without index
+                                              pulse (v1.2) */
     WCNC_CFG_ENCODER_FILTER_NS  = 0x0525,  /* uint16: PCNT glitch filter (ns) */
 
     /* Misc input pin assignments */
@@ -358,6 +412,14 @@ typedef enum {
 
     /* Device mode */
     WCNC_CFG_DEVICE_MODE        = 0x0600,  /* uint8: 0=motion controller, 1=I/O module */
+    WCNC_CFG_MACHINE_LAYOUT     = 0x0601,  /* uint8 (v1.2): what the terminals are used for,
+                                              0=six axes, 1=four axes (X, Y, Z, A): the B and C
+                                              terminals become the spindle sensor's inputs,
+                                              auxiliary inputs, a charge pump and auxiliary
+                                              outputs.  A sensor terminal the sensor does not
+                                              need is an auxiliary input.  It decides the pin of
+                                              every function that has not been given one with
+                                              WCNC_CFG_PIN_*; takes effect after a restart. */
 
     /* I/O module configuration */
     WCNC_CFG_IO_PIN_COUNT       = 0x0610,  /* uint8: number of I/O channels */
@@ -417,7 +479,8 @@ typedef struct WCNC_PACKED {
                                         at its cruise speed (it is not played faster). */
     uint32_t entry_speed_sqr;        /* Entry speed^2 * 1000 (steps/sec)^2 */
     uint32_t exit_speed_sqr;         /* Exit speed^2 * 1000 */
-    uint32_t acceleration;           /* steps/sec^2 * 100 */
+    uint32_t acceleration;           /* steps/sec^2 * 100.  Spindle-synchronised segment:
+                                        the spindle speed it was planned for, rpm * 1000 */
     uint16_t segment_id;             /* For tracking / debugging */
     uint8_t  flags;                  /* WCNC_SEG_FLAG_* */
     uint8_t  reserved;

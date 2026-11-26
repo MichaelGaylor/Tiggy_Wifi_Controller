@@ -10,9 +10,11 @@
 idf_component_register(
     SRCS
         "main.c"
+        "pin_layout.c"
         "motion/stepper.c"
         "motion/step_engine.c"
         "motion/timed_exec.c"
+        "motion/spindle_track.c"
         "motion/motion_core.c"
         "motion/motion_control.c"
         "motion/planner.c"

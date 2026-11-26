@@ -18,6 +18,7 @@
 #include "gpio_control.h"
 #include "../config.h"
 #include "../pin_config.h"
+#include "../pin_layout.h"
 #include "../persist/nvs_config.h"
 #include "../../../protocol/wifi_cnc_protocol.h"
 
@@ -35,28 +36,6 @@ static const char *TAG = "gpio_ctrl";
 #define PUMP_LEDC_TIMER         LEDC_TIMER_1
 #define PUMP_LEDC_CHANNEL       LEDC_CHANNEL_1
 
-/* Board defaults for the optional pins */
-#ifndef PIN_MISC_OUT_0
-#define PIN_MISC_OUT_0  GPIO_NUM_NC
-#endif
-#ifndef PIN_MISC_OUT_1
-#define PIN_MISC_OUT_1  GPIO_NUM_NC
-#endif
-#ifndef PIN_MISC_IN_0
-#define PIN_MISC_IN_0   GPIO_NUM_NC
-#endif
-#ifndef PIN_MISC_IN_1
-#define PIN_MISC_IN_1   GPIO_NUM_NC
-#endif
-#ifndef PIN_MISC_IN_2
-#define PIN_MISC_IN_2   GPIO_NUM_NC
-#endif
-#ifndef PIN_MISC_IN_3
-#define PIN_MISC_IN_3   GPIO_NUM_NC
-#endif
-#ifndef PIN_CHARGE_PUMP
-#define PIN_CHARGE_PUMP GPIO_NUM_NC
-#endif
 
 static int s_limit_pins[WCNC_MAX_AXES];
 static int s_estop_pin = -1, s_probe_pin = -1, s_spindle_pin = -1, s_pump_pin = -1;
@@ -149,35 +128,32 @@ void gpio_control_init(void)
     static const char *lim_keys[] = { "p_lx", "p_ly", "p_lz", "p_la", "p_lb", "p_lc" };
     static const char *out_keys[GPIO_MISC_OUTPUTS] = { "p_mo0", "p_mo1", "p_mo2", "p_mo3", "p_mo4" };
     static const char *in_keys[GPIO_MISC_INPUTS] = { "p_mi0", "p_mi1", "p_mi2", "p_mi3" };
-    const gpio_num_t lim_defaults[] = LIMIT_PINS;
-    const gpio_num_t out_defaults[GPIO_MISC_OUTPUTS] = { PIN_MISC_OUT_0, PIN_MISC_OUT_1, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC };
-    const gpio_num_t in_defaults[GPIO_MISC_INPUTS] = { PIN_MISC_IN_0, PIN_MISC_IN_1, PIN_MISC_IN_2, PIN_MISC_IN_3 };
 
     gpio_control_reload_inversion();
 
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        s_limit_pins[i] = stored_pin(lim_keys[i], lim_defaults[i], false);
+        s_limit_pins[i] = stored_pin(lim_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_LIMIT_X + i)), false);
         make_input(s_limit_pins[i]);
         s_db_limit[i].level = 1;
     }
-    s_estop_pin = stored_pin("p_est", PIN_ESTOP, false);
-    s_probe_pin = stored_pin("p_prb", PIN_PROBE, false);
+    s_estop_pin = stored_pin("p_est", pin_layout_default(WCNC_CFG_PIN_ESTOP), false);
+    s_probe_pin = stored_pin("p_prb", pin_layout_default(WCNC_CFG_PIN_PROBE), false);
     make_input(s_estop_pin);
     make_input(s_probe_pin);
     s_db_estop.level = 1;
     s_db_probe.level = 1;
     for (int i = 0; i < GPIO_MISC_INPUTS; i++) {
-        s_misc_in_pins[i] = stored_pin(in_keys[i], in_defaults[i], false);
+        s_misc_in_pins[i] = stored_pin(in_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_MISC_IN0 + i)), false);
         make_input(s_misc_in_pins[i]);
         s_db_misc[i].level = 1;
     }
 
-    s_spindle_pin = stored_pin("p_spn", PIN_SPINDLE_EN, true);
-    s_pump_pin = stored_pin("p_cp", PIN_CHARGE_PUMP, true);
+    s_spindle_pin = stored_pin("p_spn", pin_layout_default(WCNC_CFG_PIN_SPINDLE), true);
+    s_pump_pin = stored_pin("p_cp", pin_layout_default(WCNC_CFG_PIN_CHARGE_PUMP), true);
     make_output(s_spindle_pin);
     make_output(s_pump_pin);
     for (int i = 0; i < GPIO_MISC_OUTPUTS; i++) {
-        s_misc_out_pins[i] = stored_pin(out_keys[i], out_defaults[i], true);
+        s_misc_out_pins[i] = stored_pin(out_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_MISC_OUT0 + i)), true);
         make_output(s_misc_out_pins[i]);
     }
 

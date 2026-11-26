@@ -151,6 +151,8 @@ CFG_PIN_MISC_IN3 = 0x0533
 
 # Device mode (v1.1)
 CFG_DEVICE_MODE = 0x0600
+# What the axis terminals are used for (v1.2): 0 = six axes, 1 = four axes, B and C as I/O
+CFG_MACHINE_LAYOUT = 0x0601
 
 # I/O module config (v1.1)
 CFG_IO_PIN_COUNT = 0x0610
@@ -262,6 +264,7 @@ CONFIG_KEYS = {
     CFG_PIN_MISC_IN3: ("Pin Misc In 3", VAL_UINT8),
     # Device mode
     CFG_DEVICE_MODE: ("Device Mode", VAL_UINT8),
+    CFG_MACHINE_LAYOUT: ("Machine Layout", VAL_UINT8),
     # I/O module
     CFG_IO_PIN_COUNT: ("IO Pin Count", VAL_UINT8),
     CFG_IO_DIR_MASK: ("IO Dir Mask", VAL_UINT16),

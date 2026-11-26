@@ -24,7 +24,8 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 - GRBL-compatible serial/telnet interface for standalone use
 - Homing, limit switches, E-stop and probe inputs, handled in the controller
 - Spindle on/off or PWM, charge pump, auxiliary outputs and inputs (count varies by board)
-- Spindle encoder speed feedback
+- Spindle speed feedback from an encoder or a one-pulse-per-revolution sensor
+- **Screw cutting on lathes**: the controller itself keeps the tool in step with the spindle, so the pitch holds when the spindle slows in the cut and every pass follows the last
 - Optional **I/O expansion module** (pendant buttons, relay outputs)
 - Auto-discovery and automatic reconnection
 
@@ -38,6 +39,8 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 | Classic board | ESP32-WROOM-32 | 6 (limited I/O) | Legacy support |
 
 All boards run the same 6-axis firmware. "Wired Axes" refers to the number of step/dir GPIO pairs physically routed on the board. The firmware supports 6 axes regardless of board -- unused axes simply have no GPIO assigned.
+
+One setting trades the B and C axes of the six-axis boards for inputs and outputs - a spindle sensor, a charge pump, more auxiliary I/O: see [Four axes and more I/O](#four-axes-and-more-io-spindle-sensor-and-screw-cutting).
 
 ## Quick Start
 
@@ -76,7 +79,30 @@ Download the Mach3 plugin from [www.tiggyengineering.com](https://www.tiggyengin
 
 Plugin 2.0 needs controller firmware 1.2.0 or newer. See the [User Manual](Tiggy_Plugin_Manual.md).
 
-**Free tier**: 3 axes (X/Y/Z). **Pro Mach3 license**: 6 axes, slaved axes, I/O expansion module. Note: this axis limit applies **only to the Mach3 plugin**. LinuxCNC, GRBL senders, and all other host software get full 6-axis support for free.
+**Free tier**: 3 axes (X/Y/Z). **Pro Mach3 license**: 6 axes, slaved axes, I/O expansion module, screw cutting (G32/G76 in Mach3 Turn). Note: this axis limit applies **only to the Mach3 plugin**. LinuxCNC, GRBL senders, and all other host software get full 6-axis support for free.
+
+## Four axes and more I/O: spindle sensor and screw cutting
+
+Six axes use nearly every terminal of a Tiggy Pro board. A lathe that cuts threads, and many a mill, would rather have four axes and the inputs and outputs. Setting the controller's *machine layout* to **four axes** (configuration key `WCNC_CFG_MACHINE_LAYOUT`; in Mach3 it is on the plugin's Terminals tab) keeps X, Y, Z and A - and Ethernet - and turns the terminals of B and C into inputs and outputs. The same set-up serves a lathe and a mill: the spindle sensor takes only the inputs its kind needs, and every sensor terminal it leaves free is an auxiliary input.
+
+With four axes ("or" = what the terminal is when the sensor does not use it):
+
+| | Tiggy Pro (octal memory) | Tiggy Pro (quad memory) |
+|---|---|---|
+| Encoder A | GPIO 16, or auxiliary input 3 | GPIO 16, or auxiliary input 4 |
+| Encoder B | GPIO 17, or auxiliary input 4 | GPIO 17 |
+| Index pulse / single sensor | GPIO 21, or auxiliary input 2 | GPIO 37 |
+| Other auxiliary inputs | 1: GPIO 18 | 1 to 3: GPIO 18, 21, 36 |
+| Auxiliary outputs | 1 to 3: GPIO 11, 12, 40 | 1 to 5: GPIO 11, 12, 40, 39, 34 |
+| Charge pump | GPIO 39 | GPIO 10 |
+
+So an octal-memory Pro board with four axes, Ethernet and an encoder with index still has a limit/home input per axis, probe, E-stop, an auxiliary input, the spindle output, a charge pump and three auxiliary outputs; without a sensor it has four auxiliary inputs. No terminal changes between input and output with the sensor setting - the sensor only ever shares a terminal with an input - so a sensor left wired while the setting is changed is never driven against. A single sensor has its terminal even with six axes on both Pro boards (GPIO 21 and GPIO 37). The Tiggy Standard board has its sensor terminals in any case (encoder A / B / index on GPIO 15 / 16 / 17; those the sensor does not use are auxiliary inputs 1 to 3). `firmware/test/test_pin_layout.c` checks every combination for each board and prints it.
+
+The spindle sensor is either an **encoder with A and B channels**, with or without an index pulse (100 lines or more), or a **single sensor giving one pulse per revolution**, which goes on the index terminal. The encoder gives the better thread: with one pulse per turn the controller cannot see a change of spindle speed until the turn is over. (A single sensor giving several pulses per revolution serves the speed display only: nothing tells the pulses apart, so no thread can be started by them.) The inputs have the chip's weak pull-ups: a single sensor that switches to ground connects directly, but an open-collector encoder needs pull-up resistors of its own (a few kilohms to 3.3 V) to be read at speed, or push-pull outputs.
+
+A threading pass is played in step with the spindle or not at all. If something breaks into one - a feed hold or stop from the host in the middle of it, the host leaving the controller without motion, a spindle the axes cannot keep up with - the controller brings the axes to rest, drops what was left and says so (`WCNC_STREAM_SYNC_LOST`), rather than carry on out of step with the thread already cut.
+
+For screw cutting the host streams the threading pass like any other move, marked to be played *by the spindle* and to begin at its index (`WCNC_SEG_FLAG_SPINDLE_SYNC`, `WCNC_SEG_FLAG_INDEX_START` in `protocol/wifi_cnc_protocol.h`). The controller then advances through the move by the angle the spindle really turns, so the pitch does not depend on the spindle holding its speed, a spindle that stalls stops the axes with it, and every pass begins at the same place on the work. The Mach3 plugin does this for G32 and G76 in Mach3 Turn; the LinuxCNC driver does not use it yet.
 
 ## Architecture
 
@@ -103,6 +129,7 @@ firmware/test/pc/build.sh                 # or build.bat on Windows: builds the 
 python tools/firmware_sim.py              # the firmware's motion code as a controller on this PC
 python tools/protocol_conformance.py --sim --motion 127.0.0.1    # protocol tests
 python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, starved stream, pulse spacing
+python tools/threading_test.py            # screw cutting: every step of a pass against the angle of a simulated spindle
 ```
 
 Host software (the Mach3 plugin, LinuxCNC) connects to it like to a board. `tools/tiggy_sim.py` is an independent model of the same protocol in Python; the conformance tests hold both to one behaviour, and can be run against a real board too (`protocol_conformance.py <ip>`, add `--motion` only when the motors are free to move).

@@ -17,6 +17,7 @@
 #include "se_port.h"
 #include "../config.h"
 #include "../pin_config.h"
+#include "../pin_layout.h"
 #include "../persist/nvs_config.h"
 
 #include <string.h>
@@ -64,14 +65,11 @@ void stepper_init(void)
     static const char *step_keys[] = { "p_sx", "p_sy", "p_sz", "p_sa", "p_sb", "p_sc" };
     static const char *dir_keys[]  = { "p_dx", "p_dy", "p_dz", "p_da", "p_db", "p_dc" };
     static const char *lim_keys[]  = { "p_lx", "p_ly", "p_lz", "p_la", "p_lb", "p_lc" };
-    const gpio_num_t step_defaults[] = STEP_PINS;
-    const gpio_num_t dir_defaults[]  = DIR_PINS;
-    const gpio_num_t lim_defaults[]  = LIMIT_PINS;
 
     memset(&se_port, 0, sizeof(se_port));
     for (int i = 0; i < WCNC_MAX_AXES; i++) {
-        int step = stored_pin(step_keys[i], step_defaults[i]);
-        int dir = stored_pin(dir_keys[i], dir_defaults[i]);
+        int step = stored_pin(step_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_STEP_X + i)));
+        int dir = stored_pin(dir_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_DIR_X + i)));
         if (!pin_ok_output(step) || !pin_ok_output(dir)) {
             if (step >= 0 || dir >= 0)
                 ESP_LOGW(TAG, "Axis %d: step/dir pins %d/%d cannot be used on this board - axis disabled", i, step, dir);
@@ -79,12 +77,12 @@ void stepper_init(void)
         }
         se_port.step_pin[i] = (int8_t)step;
         se_port.dir_pin[i] = (int8_t)dir;
-        int lim = stored_pin(lim_keys[i], lim_defaults[i]);
+        int lim = stored_pin(lim_keys[i], pin_layout_default((uint16_t)(WCNC_CFG_PIN_LIMIT_X + i)));
         se_port.limit_pin[i] = (int8_t)(pin_ok_input(lim) ? lim : -1);
     }
-    int probe = stored_pin("p_prb", PIN_PROBE);
+    int probe = stored_pin("p_prb", pin_layout_default(WCNC_CFG_PIN_PROBE));
     se_port.probe_pin = (int8_t)(pin_ok_input(probe) ? probe : -1);
-    int enable = stored_pin("p_en", PIN_ENABLE);
+    int enable = stored_pin("p_en", pin_layout_default(WCNC_CFG_PIN_ENABLE));
     s_enable_pin = pin_ok_output(enable) ? (gpio_num_t)enable : GPIO_NUM_NC;
 
     se_init();
@@ -119,6 +117,7 @@ void stepper_init(void)
     s_enabled = true;                       /* force the write below */
     stepper_set_enabled(false);
 
+    ESP_LOGI(TAG, "Terminals laid out for %s axes", pin_layout() == PIN_LAYOUT_FOUR_AXES ? "four" : "six");
     ESP_LOGI(TAG, "Pins: step=[%d,%d,%d,%d,%d,%d] dir=[%d,%d,%d,%d,%d,%d] enable=%d",
              se_port.step_pin[0], se_port.step_pin[1], se_port.step_pin[2],
              se_port.step_pin[3], se_port.step_pin[4], se_port.step_pin[5],

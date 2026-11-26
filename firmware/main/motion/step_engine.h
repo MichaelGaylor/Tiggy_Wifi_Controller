@@ -13,6 +13,9 @@
  *     a starved queue without the host having to plan any of them.
  *   - A probe move stops within one step of contact; while homing, each axis
  *     stops within one step of its switch.
+ *   - Segments marked for it are played in step with the spindle instead of
+ *     the clock (screw cutting), beginning at the spindle's index position
+ *     if asked to; see spindle_track.h for where the angle comes from.
  *
  * The code is hardware independent.  The few things that touch hardware are
  * inline functions in se_port.h, of which there is one for the ESP32 (in
@@ -51,9 +54,11 @@ uint32_t se_min_interval_us(void);
  * the first segment of a new stream, with the engine stopped. */
 void se_reset_stream(void);
 
-/* Queue a timed segment (WCNC_SEG_FLAG_TIMED, optionally _SUBSTEP).
- * Returns 1 when queued, 0 when the queue is full (try again later) and
- * -1 when the segment cannot be played at all. */
+/* Queue a timed segment (WCNC_SEG_FLAG_TIMED, optionally _SUBSTEP,
+ * _SPINDLE_SYNC, _INDEX_START).  Returns 1 when queued, 0 when the queue is
+ * full (try again later) and -1 when the segment cannot be played at all:
+ * too many steps, or to be played by the spindle when there is no spindle
+ * sensor or no usable reference speed. */
 int  se_push(const wcnc_motion_segment_t *seg);
 
 uint16_t se_free(void);                     /* segments that can still be queued */
@@ -81,13 +86,41 @@ void se_halt(void);
 
 /* Slow playback smoothly to a standstill over ramp_ms.  With discard the
  * queue is then thrown away and the engine stops (se_active() becomes
- * false); without, it pauses and se_ramp_resume() continues. */
+ * false); without, it pauses and se_ramp_resume() continues.
+ * A run being played by the spindle loses its step with the spindle by
+ * this: it stops like any other move, by the clock, and unless what is left
+ * of it is no more than a tail the queue is dropped whether or not that was
+ * asked for (se_sync_broken()).  (While still waiting for the index nothing
+ * has moved, and the wait simply starts again on resume.) */
 void se_ramp_stop(uint32_t ramp_ms, bool discard);
 void se_ramp_resume(uint32_t ramp_ms);
 
 /* True when the last segment played before the queue ran out had
  * WCNC_SEG_FLAG_LAST: the stream ended on purpose, not by starvation. */
 bool se_ended_on_last(void);
+
+/* 0: playing by the clock (or not at all), 1: waiting for the spindle's
+ * index before a run, 2: playing in step with the spindle. */
+int  se_sync_state(void);
+
+/* A run played by the spindle is played in step with it or not at all.
+ * se_sync_lost(): the run in hand has lost step with the spindle (a stop
+ * broke into it, the queue ran dry in it).  Its tail is still played, by the
+ * clock, if the caller resumes or starts it; the engine gives it up of its
+ * own accord when that turns out to be more than a tail, and the caller
+ * should (se_give_up()) as soon as it knows the rest is no tail.
+ * se_give_up(): stop, over ramp_ms if the axes are moving, drop the queue
+ * and report the run broken.
+ * se_sync_broken(): a run was given up; the engine is slowing to a
+ * standstill or has stopped, and what was queued is dropped.  Stays true
+ * until se_halt().
+ * se_sync_slipped(): the axes are an eighth of a revolution or more behind
+ * the spindle in the run being played; the caller is expected to give the
+ * run up. */
+bool se_sync_lost(void);
+void se_give_up(uint32_t ramp_ms);
+bool se_sync_broken(void);
+bool se_sync_slipped(void);
 
 /* --- Position and feedback ------------------------------------------- */
 

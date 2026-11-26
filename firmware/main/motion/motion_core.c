@@ -309,6 +309,22 @@ static void tick_stream(void)
         if (!se_active()) apply_flush((uint8_t)mc.pending_stream);
         return;
     }
+    if (se_sync_broken()) {
+        /* A run played in step with the spindle was broken into (a stop in
+         * the middle of it, a queue that ran dry, axes that could not keep
+         * up).  The engine slows to a standstill and drops the rest; so is
+         * whatever else the host had sent for this stream, and the host is
+         * told why. */
+        if (se_active()) return;
+        se_halt();
+        mc.stream_flags |= WCNC_STREAM_SYNC_LOST;
+        mc.stream_closed = true;
+        mc.owner = OWN_NONE;
+        if (mc.state == WCNC_STATE_RUN || mc.state == WCNC_STATE_HOLD) mc.state = WCNC_STATE_IDLE;
+        stream_idle();
+        mc_hal_log("A move in step with the spindle was interrupted: abandoned");
+        return;
+    }
     if (se_probe_tripped()) {
         /* Contact: the engine has stopped where it touched and dropped the
          * rest.  Whatever else the host had sent for this stream is void. */
@@ -348,6 +364,17 @@ static void tick_stream(void)
             return;
         }
         if (mc.state != WCNC_STATE_IDLE) return;
+        if (se_sync_lost() && !mc.last_queued) {
+            /* More of a run that lost step with the spindle when the queue
+             * ran dry in it.  Only its tail would still be played, and a
+             * tail ends the stream: until that end is here nothing is
+             * started, and if the run goes on arriving instead, or nothing
+             * more comes, it is given up without another step. */
+            if (se_queued_us() >= START_QUEUE_US ||
+                (uint32_t)(mc_hal_ms() - mc.first_queued_ms) >= STARVE_WAIT_MS)
+                se_give_up(0);
+            return;
+        }
         if (se_queued_us() >= START_QUEUE_US || mc.last_queued ||
             (uint32_t)(mc_hal_ms() - mc.first_queued_ms) >= START_MAX_WAIT_MS) {
             drivers(true);
@@ -361,7 +388,21 @@ static void tick_stream(void)
         return;
     }
 
+    if (mc.state == WCNC_STATE_HOLD && se_paused() && se_sync_lost() && !mc.last_queued) {
+        /* Held in the middle of a run played by the spindle.  It has lost
+         * its step, and there is more of it to come than is queued: it will
+         * not be played on, and the host may as well know now. */
+        se_give_up(0);
+        return;
+    }
     if (mc.state != WCNC_STATE_RUN) return;
+
+    if (se_sync_slipped()) {
+        /* The axes are no longer where the spindle would have them: nothing
+         * good comes of going on. */
+        se_give_up(stop_time_within_queue_ms());
+        return;
+    }
 
     /* Playing.  If the host falls behind, slow to a stop inside what is
      * still queued rather than running off the end of it at speed, and pick
@@ -377,6 +418,15 @@ static void tick_stream(void)
                 mc.starve_ms = mc_hal_ms();
                 mc.stream_flags |= WCNC_STREAM_UNDERRUN;
             }
+        }
+    } else if (se_sync_lost() && !mc.last_queued) {
+        /* The stop broke into a run played by the spindle, which has lost
+         * its step by it.  Only a tail is still played: the end of the
+         * stream, arriving a moment late.  If the run goes on arriving
+         * instead, or nothing more comes, it is given up. */
+        if (se_queued_us() >= START_QUEUE_US || (uint32_t)(mc_hal_ms() - mc.starve_ms) > STARVE_WAIT_MS) {
+            se_give_up(stop_time_within_queue_ms());
+            mc.starved = false;
         }
     } else if (mc.last_queued || se_queued_us() >= START_QUEUE_US) {
         se_ramp_resume(mc.hold_ramp_ms);
@@ -941,6 +991,12 @@ void mc_feed_resume(void)
 {
     if (mc.state != WCNC_STATE_HOLD) return;
     mc.state = WCNC_STATE_RUN;
+    if (se_sync_lost() && !mc.last_queued) {
+        /* (held in a run played by the spindle, and resumed before it had
+         * even stopped: the run is not played on) */
+        se_give_up(mc.hold_ramp_ms ? mc.hold_ramp_ms : 200);
+        return;
+    }
     se_ramp_resume(mc.hold_ramp_ms ? mc.hold_ramp_ms : 200);
 }
 
@@ -1111,6 +1167,11 @@ static void send_status(void)
     r->next_segment_id = mc.next_seg;
     r->stream_id = mc.stream_id;
     r->stream_flags = mc.stream_flags;
+    if (mc.owner == OWN_STREAM) {
+        int sync = se_sync_state();
+        if (sync == 1) r->stream_flags |= WCNC_STREAM_WAIT_INDEX;
+        else if (sync == 2) r->stream_flags |= WCNC_STREAM_SPINDLE_SYNC;
+    }
     r->homed_mask = mc.homed_mask;
     if (mc.state == WCNC_STATE_JOG) {
         for (int i = 0; i < WCNC_MAX_AXES; i++)

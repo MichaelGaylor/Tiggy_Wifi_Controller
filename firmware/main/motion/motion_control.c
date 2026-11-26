@@ -139,6 +139,7 @@ uint8_t motion_capabilities(void)
     if (s_io_module) return caps | WCNC_CAP_IO_MODULE;
     caps |= gpio_control_get_capabilities();
     if (spindle_encoder_is_available()) caps |= WCNC_CAP_SPINDLE_ENCODER;
+    if (spindle_encoder_can_sync()) caps |= WCNC_CAP_SPINDLE_SYNC;
     return caps;
 }
 
@@ -269,8 +270,12 @@ void motion_control_task(void *pvParameters)
     static motion_msg_t msg;
     s_task = xTaskGetCurrentTaskHandle();
 
-    /* The step interrupt belongs to the core this task runs on */
-    if (!s_io_module) stepper_start_timer();
+    /* The step interrupt belongs to the core this task runs on, and so do
+     * the interrupts that read the spindle sensor */
+    if (!s_io_module) {
+        stepper_start_timer();
+        spindle_encoder_start();
+    }
     mc_init();
     ESP_LOGI(TAG, "Motion task running on core %d (%s)", xPortGetCoreID(),
              s_io_module ? "I/O module" : "motion controller");

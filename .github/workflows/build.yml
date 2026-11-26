@@ -72,6 +72,7 @@ jobs:
           sleep 3
           python tools/protocol_conformance.py --sim --motion 127.0.0.1
           python tools/firmware_selftest.py
+          python tools/threading_test.py
 
   test-linuxcnc-driver:
     name: Test the LinuxCNC driver

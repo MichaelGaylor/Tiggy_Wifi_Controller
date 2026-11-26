@@ -31,6 +31,7 @@ STATUS_V11 = struct.Struct("<6iHH8BHIi4BHHIHH")
 STATUS_V12 = struct.Struct("<HBBBBH")
 STATES = ["IDLE", "RUN", "HOLD", "JOG", "HOMING", "PROBING", "ALARM", "ESTOP", "DISCONNECTED"]
 SEG_PROBE, SEG_LAST, SEG_TIMED, SEG_SUBSTEP = 4, 2, 0x10, 0x20
+SEG_SYNC, SEG_INDEX = 0x40, 0x80
 
 
 def crc16(data):
@@ -52,6 +53,7 @@ class Client:
         self.udp.settimeout(0.02)
         self.status = None
         self.status_count = 0
+        self.sflags_seen = 0                    # every stream flag reported since a test last cleared this
         self.io = dict(misc=0, spindle=0, rpm=0, coolant=0, flags=0x03)   # WATCHDOG | REPLY_TO_SOURCE
         self.last_io = 0.0
         self.last_ping = time.perf_counter()
@@ -141,10 +143,12 @@ class Client:
                     s = dict(pos=list(f[0:6]), buf_avail=f[6], buf_total=f[7], state=f[8], alarm=f[9],
                              limits=f[10], probe=f[11], homing=f[12], home_sw=f[13], estop_in=f[14], flags=f[15],
                              seg=f[16], feed=f[18], misc_out=f[19], misc_in=f[20], spindle=f[21], coolant=f[22],
+                             rpm=f[23], spindle_pos=f[24], index_count=f[25],
                              next_seg=0, stream=0, sflags=0, homed=0, jog=0, queued_ms=0, v12=False)
                     if len(p[1]) >= STATUS_V11.size + STATUS_V12.size:
                         g = STATUS_V12.unpack_from(p[1], STATUS_V11.size)
                         s.update(next_seg=g[0], stream=g[1], sflags=g[2], homed=g[3], jog=g[4], queued_ms=g[5], v12=True)
+                        self.sflags_seen |= g[2]
                     self.status = s
                     self.status_count += 1
             except socket.timeout:
@@ -169,15 +173,21 @@ class Client:
                 return
         raise AssertionError("stream flush to %d not confirmed" % stream)
 
-    def stream(self, stream, segs, drop=None, timeout=20.0):
+    def stream(self, stream, segs, drop=None, timeout=20.0, until=None, first=0):
         """Send (steps[6], duration_us, flags) segments reliably; returns when all are accepted.
-        'drop' is an optional function(packet_index) -> bool to discard packets on purpose."""
+        A segment may have a fourth item: the spindle speed it was planned for, rpm * 1000
+        (for SEG_SYNC).  'drop' is an optional function(packet_index) -> bool to discard
+        packets on purpose.  'until' is an optional function(status) -> bool: when it says
+        so, sending stops there and then.  'first' is the number of segments this stream
+        has been sent already (by an earlier call)."""
         base, nxt, sent_pkts, last_progress = 0, 0, 0, time.perf_counter()
         end = time.perf_counter() + timeout
         while base < len(segs):
             s = self.pump(0.0)
+            if until and s and until(s):
+                return sent_pkts
             if s and s["stream"] == stream:
-                acked = base + ((s["next_seg"] - base) & 0xFFFF)
+                acked = base + ((s["next_seg"] - first - base) & 0xFFFF)
                 if base < acked <= nxt:
                     base, last_progress = acked, time.perf_counter()
                 room = s["buf_avail"] - (nxt - base)
@@ -187,8 +197,9 @@ class Client:
                     n = min(8, len(segs) - nxt, room)
                     body = struct.pack("<BBBB", n, 1, stream, 0)
                     for i in range(nxt, nxt + n):
-                        st, dur, fl = segs[i]
-                        body += SEG.pack(*st, dur, 0, 0, 0, i & 0xFFFF, fl | SEG_TIMED, 0)
+                        st, dur, fl = segs[i][:3]
+                        ref = segs[i][3] if len(segs[i]) > 3 else 0
+                        body += SEG.pack(*st, dur, 0, 0, ref, (first + i) & 0xFFFF, fl | SEG_TIMED, 0)
                     if not (drop and drop(sent_pkts)):
                         self.send(1, body)
                     sent_pkts += 1

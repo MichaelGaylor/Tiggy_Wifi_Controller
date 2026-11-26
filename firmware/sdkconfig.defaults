@@ -52,3 +52,8 @@ CONFIG_LOG_DEFAULT_LEVEL=2
 # that step pulses keep their timing while flash is being written
 CONFIG_GPTIMER_ISR_IRAM_SAFE=y
 CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y
+
+# Spindle sensor: its pulse counter is read from a timer interrupt that, like
+# the step interrupt, keeps running while flash is being written
+CONFIG_PCNT_CTRL_FUNC_IN_IRAM=y
+CONFIG_PCNT_ISR_IRAM_SAFE=y

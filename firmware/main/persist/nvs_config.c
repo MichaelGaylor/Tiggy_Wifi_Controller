@@ -8,6 +8,7 @@
 #include "nvs_config.h"
 #include "../config.h"
 #include "../pin_config.h"
+#include "../pin_layout.h"
 #include "../../../protocol/wifi_cnc_protocol.h"
 
 #include <string.h>
@@ -246,6 +247,7 @@ static const char *protocol_key_to_nvs(uint16_t key)
     case WCNC_CFG_PIN_MISC_IN3:    return "p_mi3";
     /* Device mode + I/O module */
     case WCNC_CFG_DEVICE_MODE:     return "dev_mode";
+    case WCNC_CFG_MACHINE_LAYOUT:  return "layout";
     case WCNC_CFG_IO_PIN_COUNT:    return "io_cnt";
     case WCNC_CFG_IO_DIR_MASK:     return "io_dir";
     case WCNC_CFG_IO_PULLUP_MASK:  return "io_pull";
@@ -308,7 +310,7 @@ static uint16_t protocol_key_value_type(uint16_t key)
     if (key >= WCNC_CFG_PIN_MISC_IN0 && key <= WCNC_CFG_PIN_MISC_IN3)
         return WCNC_VAL_UINT8;
     /* Device mode, I/O module pin count */
-    if (key == WCNC_CFG_DEVICE_MODE || key == WCNC_CFG_IO_PIN_COUNT)
+    if (key == WCNC_CFG_DEVICE_MODE || key == WCNC_CFG_IO_PIN_COUNT || key == WCNC_CFG_MACHINE_LAYOUT)
         return WCNC_VAL_UINT8;
     /* I/O module masks are uint16 */
     if (key == WCNC_CFG_IO_DIR_MASK || key == WCNC_CFG_IO_PULLUP_MASK ||
@@ -363,76 +365,24 @@ static uint8_t protocol_key_default_u8(uint16_t key)
     if (key == WCNC_CFG_INVERT_ENABLE)  return CFG_DEFAULT_INVERT_ENABLE;
     if (key == WCNC_CFG_HOMING_DIR_MASK) return CFG_DEFAULT_HOMING_DIR_MASK;
     if (key == WCNC_CFG_LIMIT_ENABLE_MASK) return 0x3F;
-    /* Pin assignment defaults from pin_config.h */
-    if (key == WCNC_CFG_PIN_STEP_X)      return (uint8_t)PIN_STEP_X;
-    if (key == WCNC_CFG_PIN_STEP_Y)      return (uint8_t)PIN_STEP_Y;
-    if (key == WCNC_CFG_PIN_STEP_Z)      return (uint8_t)PIN_STEP_Z;
-    if (key == WCNC_CFG_PIN_STEP_A)      return (uint8_t)PIN_STEP_A;
-    if (key == WCNC_CFG_PIN_STEP_B)      return (uint8_t)PIN_STEP_B;
-    if (key == WCNC_CFG_PIN_STEP_C)      return (uint8_t)PIN_STEP_C;
-    if (key == WCNC_CFG_PIN_DIR_X)       return (uint8_t)PIN_DIR_X;
-    if (key == WCNC_CFG_PIN_DIR_Y)       return (uint8_t)PIN_DIR_Y;
-    if (key == WCNC_CFG_PIN_DIR_Z)       return (uint8_t)PIN_DIR_Z;
-    if (key == WCNC_CFG_PIN_DIR_A)       return (uint8_t)PIN_DIR_A;
-    if (key == WCNC_CFG_PIN_DIR_B)       return (uint8_t)PIN_DIR_B;
-    if (key == WCNC_CFG_PIN_DIR_C)       return (uint8_t)PIN_DIR_C;
-    if (key == WCNC_CFG_PIN_ENABLE)      return (uint8_t)PIN_ENABLE;
-    if (key == WCNC_CFG_PIN_LIMIT_X)     return (uint8_t)PIN_LIMIT_X;
-    if (key == WCNC_CFG_PIN_LIMIT_Y)     return (uint8_t)PIN_LIMIT_Y;
-    if (key == WCNC_CFG_PIN_LIMIT_Z)     return (uint8_t)PIN_LIMIT_Z;
-    if (key == WCNC_CFG_PIN_LIMIT_A)     return (uint8_t)PIN_LIMIT_A;
-    if (key == WCNC_CFG_PIN_LIMIT_B)     return (uint8_t)PIN_LIMIT_B;
-    if (key == WCNC_CFG_PIN_LIMIT_C)     return (uint8_t)PIN_LIMIT_C;
-    if (key == WCNC_CFG_PIN_PROBE)       return (uint8_t)PIN_PROBE;
-    if (key == WCNC_CFG_PIN_ESTOP)       return (uint8_t)PIN_ESTOP;
-    if (key == WCNC_CFG_PIN_SPINDLE)     return (uint8_t)PIN_SPINDLE_EN;
-    if (key == WCNC_CFG_PIN_LED)         return (uint8_t)PIN_STATUS_LED;
-#if HAS_CHARGE_PUMP
-    if (key == WCNC_CFG_PIN_CHARGE_PUMP) return (uint8_t)PIN_CHARGE_PUMP;
-#endif
-#if MISC_OUTPUT_COUNT > 0
-    if (key == WCNC_CFG_PIN_MISC_OUT0)   return (uint8_t)PIN_MISC_OUT_0;
-#endif
-#if MISC_OUTPUT_COUNT > 1
-    if (key == WCNC_CFG_PIN_MISC_OUT1)   return (uint8_t)PIN_MISC_OUT_1;
-#endif
-    /* Encoder pin defaults */
-    if (key == WCNC_CFG_PIN_ENCODER_A)     return (uint8_t)PIN_ENCODER_A;
-    if (key == WCNC_CFG_PIN_ENCODER_B)     return (uint8_t)PIN_ENCODER_B;
-    if (key == WCNC_CFG_PIN_ENCODER_INDEX) return (uint8_t)PIN_ENCODER_INDEX;
     if (key == WCNC_CFG_ENCODER_MODE)      return 0;  /* quadrature */
-    /* Misc input pin defaults */
-#if MISC_INPUT_COUNT > 0
-    if (key == WCNC_CFG_PIN_MISC_IN0)     return (uint8_t)PIN_MISC_IN_0;
-#endif
-#if MISC_INPUT_COUNT > 1
-    if (key == WCNC_CFG_PIN_MISC_IN1)     return (uint8_t)PIN_MISC_IN_1;
-#endif
-#if MISC_INPUT_COUNT > 2
-    if (key == WCNC_CFG_PIN_MISC_IN2)     return (uint8_t)PIN_MISC_IN_2;
-#endif
-#if MISC_INPUT_COUNT > 3
-    if (key == WCNC_CFG_PIN_MISC_IN3)     return (uint8_t)PIN_MISC_IN_3;
-#endif
-    /* Ethernet pin defaults */
 #if HAS_ETHERNET
-    if (key == WCNC_CFG_PIN_ETH_MOSI)     return (uint8_t)PIN_ETH_MOSI;
-    if (key == WCNC_CFG_PIN_ETH_MISO)     return (uint8_t)PIN_ETH_MISO;
-    if (key == WCNC_CFG_PIN_ETH_SCLK)     return (uint8_t)PIN_ETH_SCLK;
-    if (key == WCNC_CFG_PIN_ETH_INT)      return (uint8_t)PIN_ETH_INT;
-    if (key == WCNC_CFG_PIN_ETH_SPI_HOST) return (uint8_t)PIN_ETH_SPI_HOST;
+    if (key == WCNC_CFG_PIN_ETH_SPI_HOST)  return (uint8_t)PIN_ETH_SPI_HOST;
 #endif
     /* Device mode + I/O module defaults */
     if (key == WCNC_CFG_DEVICE_MODE)       return 0;  /* motion controller */
+    if (key == WCNC_CFG_MACHINE_LAYOUT)    return 0;  /* mill or router */
     if (key == WCNC_CFG_IO_PIN_COUNT)      return 0;
     /* I/O module pin defaults: 0xFF = not configured */
     if (key >= WCNC_CFG_IO_PIN_BASE && key < WCNC_CFG_IO_PIN_BASE + 16)
         return 0xFF;
-    /* A pin this board does not have: 0xFF = not fitted */
+    /* The pin each function has on this board, laid out for the machine it
+     * is set up as (pin_config.h, pin_layout.h); 0xFF = it has none */
     if ((key >= WCNC_CFG_PIN_STEP_X && key <= WCNC_CFG_PIN_MISC_OUT4) ||
+        (key >= WCNC_CFG_PIN_ENCODER_A && key <= WCNC_CFG_PIN_ENCODER_INDEX) ||
         (key >= WCNC_CFG_PIN_MISC_IN0 && key <= WCNC_CFG_PIN_MISC_IN3) ||
         (key >= WCNC_CFG_PIN_ETH_MOSI && key <= WCNC_CFG_PIN_ETH_INT))
-        return 0xFF;
+        return (uint8_t)pin_layout_default(key);
     return 0;
 
 }

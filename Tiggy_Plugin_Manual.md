@@ -15,6 +15,7 @@ The Tiggy Motion Controller plugin lets Mach3 drive a Tiggy controller over WiFi
 - Motion that survives a poor WiFi connection: lost data is repeated automatically and can never lose or repeat a step
 - Home and limit switches, probe (G31), E-stop input, four auxiliary inputs
 - Spindle on/off or PWM speed control, charge pump, up to five auxiliary outputs
+- Screw cutting on lathes (G32 and G76 in Mach3 Turn) with a spindle encoder or a one-pulse-per-revolution sensor
 - Optional I/O expansion module with 16 more inputs and outputs
 - The controller is found on the network automatically
 - Safe behaviour when something goes wrong: if the PC stops talking to it the controller stops the machine by itself within a second and switches its outputs off
@@ -28,7 +29,7 @@ The Tiggy Motion Controller plugin lets Mach3 drive a Tiggy controller over WiFi
 | Tiggy Pro (octal memory) | ESP32-S3-DevKitC-1 N16R8 / N8R8 | 6 | 2 | - |
 | Classic | ESP32-WROOM-32 DevKit | 6 | - | - |
 
-**Licence.** The plugin is free for three axes (X, Y, Z) with every other feature. A Pro Mach3 licence adds the A, B and C axes, slaved axes and the I/O expansion module. The controller firmware itself is open source and always has all six axes: the limit applies only to the Mach3 plugin, not to LinuxCNC or G-code senders. Licences: [www.tiggyengineering.com](https://www.tiggyengineering.com).
+**Licence.** The plugin is free for three axes (X, Y, Z) with every other feature. A Pro Mach3 licence adds the A, B and C axes, slaved axes, the I/O expansion module and screw cutting. The controller firmware itself is open source and always has all six axes: the limit applies only to the Mach3 plugin, not to LinuxCNC or G-code senders. Licences: [www.tiggyengineering.com](https://www.tiggyengineering.com).
 
 ---
 
@@ -150,9 +151,7 @@ To get off the switch: press Reset, switch on **OverRide Limits** (or use Auto L
 - M3 and M4 switch the controller's spindle output on, M5 switches it off. There is nothing to set for that.
 - **Use Spindle Motor Output** with **PWM Control** ticked: the spindle output becomes a PWM speed signal. **PWMBase Freq.** sets its frequency and **Minimum PWM** the lowest duty, in per cent, it gives while the spindle runs. **Config > Spindle Pulleys** sets the speed that corresponds to 100 %.
 - **Flood Mist Control**: choose the Output # signals for M7 and M8 and give those signals a controller output (below).
-- With a spindle encoder fitted, Mach3's true spindle speed display shows the measured speed.
-
-Spindle-synchronised threading (G32/G76) is not supported.
+- With a spindle sensor fitted (section 4.10), Mach3's true spindle speed display shows the measured speed.
 
 ### 4.7 Outputs
 
@@ -190,6 +189,45 @@ Everything in General Config works as usual. Two things to know:
 
 ---
 
+### 4.10 Four axes and more inputs and outputs; spindle sensor and screw cutting
+
+**The Terminals tab of the Tiggy window** holds two settings of the controller itself. They say how it is wired, so they are kept in the controller and are the same for every Mach3 profile that uses it.
+
+**What the axis terminals are used for.** Six axes use nearly every terminal of a Tiggy Pro board. Choose **Four axes** and the controller keeps X, Y, Z and A - and Ethernet - and turns the terminals of B and C into inputs and outputs: a spindle sensor, a charge pump, auxiliary inputs and outputs. The same set-up suits a lathe and a mill: the spindle sensor takes only the inputs its kind needs, and a terminal it does not need is an auxiliary input. The Inputs & Outputs tab always shows what each terminal does at the moment.
+
+With four axes ("or" = what the terminal is when the sensor does not use it):
+
+| | Tiggy Pro (octal memory) | Tiggy Pro (quad memory) |
+|---|---|---|
+| Encoder A | GPIO 16, or auxiliary input 3 | GPIO 16, or auxiliary input 4 |
+| Encoder B | GPIO 17, or auxiliary input 4 | GPIO 17 |
+| Index pulse / single sensor | GPIO 21, or auxiliary input 2 | GPIO 37 |
+| Other auxiliary inputs | 1: GPIO 18 | 1 to 3: GPIO 18, 21, 36 |
+| Auxiliary outputs | 1 to 3: GPIO 11, 12, 40 | 1 to 5: GPIO 11, 12, 40, 39, 34 |
+| Charge pump | GPIO 39 | GPIO 10 |
+
+No terminal changes between input and output with the sensor setting: the sensor only ever shares a terminal with an auxiliary input. A single sensor has its terminal even with six axes on both Pro boards (GPIO 21 and GPIO 37). The Tiggy Standard board has three motor outputs and its sensor terminals already, so the choice makes no difference to it: encoder A, B and index are GPIO 15, 16 and 17, and those the sensor does not use are auxiliary inputs 1 to 3. The Classic board has no terminals for a sensor.
+
+**The sensor on the spindle** (needed only for screw cutting, which is part of Tiggy Pro).
+
+- *Encoder with A and B channels*, or *with A, B and an index pulse*: enter the number of lines marked on it (50 to 10000; 100 or more is recommended). Without an index pulse, the position the spindle had when the controller was switched on serves instead. An encoder is the better sensor.
+- *One sensor: a pulse per revolution* (a slotted disc or a magnet, as used with Mach3's parallel port): it goes on the index terminal. It follows a steady spindle exactly, but cannot see a change of speed until the turn is over, so while the speed is changing - as the tool enters the cut - the thread is out by about what the speed changed by in one turn. A sensor that gives several pulses per revolution can be entered too, but only for the speed display: nothing tells its pulses apart, so no thread can be started by them.
+- *None*: the terminals are auxiliary inputs.
+
+Use 3.3 V signals. The inputs have weak pull-ups: a single sensor that switches its output to ground (open collector, NPN) connects directly. An open-collector encoder needs pull-up resistors of its own - 2.2 to 4.7 kilohms from each output to 3.3 V - or the controller cannot follow it at speed; an encoder with push-pull outputs needs nothing. The controller reads encoders up to about 250 000 lines a second (2500 lines at 6000 rpm).
+
+Changing either setting restarts the controller, which takes a few seconds; Mach3 goes into Reset meanwhile and the axes must be referenced again. Some terminals then do a different job, so check the Inputs & Outputs tab against your wiring before you power the machine. With a sensor, the Terminals tab shows it working and the spindle speed.
+
+**Cutting a thread.** Use **G32** and **G76** in Mach3 Turn as described in the Mach3 Turn manual. There is nothing to set for it in Mach3. The controller itself keeps the tool in step with the spindle: the pass begins as the spindle passes its index, and from there the tool advances by the angle the spindle really turns. So the pitch holds if the spindle slows in the cut, every pass follows the last, and if the spindle stalls the tool stops with it.
+
+- Have the spindle running at a steady speed before the thread starts (Mach3 plans the thread for the speed the spindle has at that moment), and allow a little distance before the work for the tool to get up to speed.
+- The **feed override must be at 100 %**. At any other setting Mach3 would scale the pitch, so the thread is not started: Mach3 goes into Reset saying so, with the override put back to 100 %.
+- If the spindle is not turning, or the controller has no spindle sensor, the thread is likewise not started. If the spindle stops after that, the controller waits for it, and the Tiggy note says what it is waiting for.
+- A pass is cut in step with the spindle or not at all. If this PC leaves the controller without motion in the middle of a pass (Windows or the network stalling for longer than the quarter second the controller has in hand), or the spindle runs far faster than the pass was planned for, the controller brings the axes to rest and abandons the pass; Mach3 is put into Reset and the Tiggy note says why. The thread already cut is not cut across - but check it, and the tool, before going on.
+- **Feed hold** in the middle of a pass stops it; Mach3 does not continue a threading pass, so run the thread again. **Stop** and **Reset** work as always.
+- While it supplies the spindle speed, the plugin switches Mach3's *Use Spindle Feedback in Sync Modes* on and *Spindle Speed Averaging* off (Ports and Pins > Spindle Setup) - threads come out wrong otherwise - and puts both back as you had them when Mach3 closes.
+- The true spindle speed display is steadied: while the machine moves it follows only a real change of speed, and during a thread it stays at the speed the thread was planned for.
+
 ## 5. The Tiggy window
 
 **PlugIn Control > Tiggy Motion Controller...** (it can stay open while you work).
@@ -200,6 +238,7 @@ Everything in General Config works as usual. Two things to know:
 | **Machine** | The settings Mach3 has, as the controller is using them: each axis with the terminals its motor is wired to, the step pulse timing, the input debounce time and the minimum PWM. Buttons open Motor Tuning, Ports and Pins, Homing/Limits, Spindle Pulleys and General Config. A note tells you if an axis still needs tuning. |
 | **Inputs & Outputs** | Every controller input and output: its pin number for Ports and Pins, its terminal, its state right now, and which Mach3 signals use it. "Restore the standard pin numbers" puts the numbers of section 4.3 and 4.7 back. |
 | **Controller** | The few settings Mach3 has no place for: when to release the motor drivers, charge pump frequency, homing back-off distances, diagnostics log. |
+| **Terminals** | Six axes, or four with more inputs and outputs, and the sensor on the spindle (section 4.10).  These two are kept in the controller, not in the Mach3 profile. |
 | **I/O Module** | The optional I/O expansion module (section 7). |
 | **Licence** | Your e-mail address and Pro licence key. |
 | **Setting up** | The steps of section 4 in brief. |
@@ -286,7 +325,9 @@ With the module fitted and a cable plugged in at power-on, the controller uses E
 
 Mach3's Motor Tuning will not accept a velocity above this. When several axes run close to the limit at the same time, the controller plays the move slightly slower rather than produce pulses its timing cannot guarantee; no steps are lost. If you need more speed, use fewer microsteps on the driver.
 
-**Not supported:** spindle-synchronised threading (G32/G76), backlash compensation (Config > Backlash), and the parallel-port-specific options (Sherline mode, kernel speed and so on, which have no meaning here).
+**Screw cutting.** Reference spindle speeds from 4 rpm. The spindle may run up to half as fast again as it did when the thread was planned and the tool still follows; beyond that it falls behind and catches up when it can. Rigid tapping and feed per revolution (G95) are not synchronised to the spindle.
+
+**Not supported:** backlash compensation (Config > Backlash), and the parallel-port-specific options (Sherline mode, kernel speed and so on, which have no meaning here).
 
 
 ---

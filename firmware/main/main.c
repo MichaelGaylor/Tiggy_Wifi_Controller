@@ -17,6 +17,7 @@
 #include "esp_netif.h"
 #include "esp_rom_sys.h"
 #include "nvs_flash.h"
+#include "driver/gpio.h"
 
 #include "config.h"
 #include "pin_config.h"
@@ -53,6 +54,15 @@ static void boot_stage(const char *stage)
 #endif
 }
 
+/* See app_main(): installs the GPIO interrupt service on the core this runs on. */
+static void gpio_isr_service_task(void *arg)
+{
+    esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+    if (err != ESP_OK) ESP_LOGE(TAG, "GPIO interrupt service not installed: %s", esp_err_to_name(err));
+    xTaskNotifyGive((TaskHandle_t)arg);
+    vTaskDelete(NULL);
+}
+
 void app_main(void)
 {
     boot_stage("app_main entry");
@@ -76,6 +86,17 @@ void app_main(void)
     boot_stage("nvs_config_init");
     nvs_config_init();
     ESP_LOGI(TAG, "Configuration loaded from NVS");
+
+    /* The GPIO interrupt service: the Ethernet chip's interrupt and the
+     * spindle sensor's pulse input use it.  It belongs to the core it is
+     * first asked for from, so it is installed from a task on the motion
+     * core - the quiet one, where the time a pulse is noticed is not at the
+     * mercy of the network - and before anything else can settle it. */
+    boot_stage("gpio_isr_service");
+    xTaskCreatePinnedToCore(gpio_isr_service_task, "gpio_isr", 3072, xTaskGetCurrentTaskHandle(),
+                            CFG_TASK_MOTION_PRIORITY, NULL, CFG_TASK_MOTION_CORE);
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000)) == 0)
+        ESP_LOGE(TAG, "GPIO interrupt service: no answer from the motion core");
 
     /* 3. Initialize GPIO pins (step, dir, enable, limits, probe) */
     boot_stage("gpio_control_init");
@@ -105,9 +126,10 @@ void app_main(void)
     }
     motion_control_init();
 
-    /* 5. Initialize spindle encoder (works in both modes) */
+    /* 5. Initialize the spindle sensor.  (A motion controller's: it is read
+     *    by the step timer's clock, which an I/O module does not run.) */
     boot_stage("spindle_encoder_init");
-    if (spindle_encoder_init()) {
+    if (device_mode == 0 && spindle_encoder_init()) {
         ESP_LOGI(TAG, "Spindle encoder initialized");
     }
 

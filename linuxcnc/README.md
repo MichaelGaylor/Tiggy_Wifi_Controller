@@ -75,7 +75,9 @@ later. In practice:
   finished homing, and LinuxCNC would report a limit at that moment. The
   controller's own stop guards the limit instead.
 - Spindle-synchronised motion (G33, G76 threading, rigid tapping) is not
-  supported.
+  supported by this driver yet.  (The controller can cut threads in step with
+  its spindle - the Mach3 plugin uses that - but LinuxCNC synchronises to the
+  spindle itself, which a buffered connection cannot serve.)
 
 **If the computer or the network hesitates** the queue covers it. If it
 hesitates for longer than the queue, the controller slows the machine to a

@@ -16,6 +16,15 @@ Use it to test firmware changes and host software without hardware:
 
 The automation port (127.0.0.1:58500, one JSON object per line) is the same
 as tiggy_sim.py's:  {"cmd":"get"}  {"cmd":"set","estop":1}  ...
+
+With --encoder there is a spindle with a sensor on it as well, for testing
+screw cutting.  It follows the spindle output unless told otherwise:
+
+    {"cmd":"spindle","rpm":300,"accel":2000}     turn at 300 rpm whatever the output says
+    {"cmd":"spindle","follow":1}                 follow the spindle output again
+    {"cmd":"encoder","mode":"pulse","ppr":1}     change the sensor
+    {"cmd":"trace","axis":2}                     record the steps of Z with the spindle angle at each
+    {"cmd":"trace_read"}
 """
 
 import argparse
@@ -46,7 +55,11 @@ class Info(ctypes.Structure):
                 ("io", ctypes.c_int32), ("duty", ctypes.c_double),
                 ("queued_us", ctypes.c_uint32), ("queue_count", ctypes.c_uint32),
                 ("min_gap_us", ctypes.c_uint32 * AXES), ("steps", ctypes.c_uint64 * AXES),
-                ("isr_calls", ctypes.c_uint64), ("feed", ctypes.c_uint32), ("busy", ctypes.c_int32)]
+                ("isr_calls", ctypes.c_uint64), ("feed", ctypes.c_uint32), ("busy", ctypes.c_int32),
+                ("sync", ctypes.c_int32), ("spindle_turns", ctypes.c_double), ("spindle_rpm", ctypes.c_double),
+                ("tracked_rpm_milli", ctypes.c_uint32), ("index_count", ctypes.c_uint32)]
+
+TRACE_MAX = 200000
 
 
 def load_library(path):
@@ -72,6 +85,12 @@ def load_library(path):
             lib.fws_cfg.argtypes = [ctypes.c_uint16]
             lib.fws_cfg.restype = ctypes.c_uint32
             lib.fws_log.argtypes = [ctypes.c_char_p, ctypes.c_int]
+            lib.fws_encoder.argtypes = [ctypes.c_int] * 3
+            lib.fws_restart_wanted.restype = ctypes.c_int
+            lib.fws_spindle.argtypes = [ctypes.c_int] + [ctypes.c_double] * 4
+            lib.fws_trace.argtypes = [ctypes.c_int]
+            lib.fws_trace_read.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double),
+                                           ctypes.POINTER(ctypes.c_int32), ctypes.c_int]
             return lib
     sys.exit("The firmware library was not found. Build it first:\n"
              "  firmware\\test\\pc\\build.bat   (Windows)   or   firmware/test/pc/build.sh")
@@ -93,6 +112,9 @@ class FirmwareSim:
         self.t0 = time.perf_counter()
         fw = [int(x) for x in args.fw.split(".")]
         self.lib.fws_init(1 if args.io_module else 0, args.encoder, (fw[0] << 24) | (fw[1] << 16) | fw[2])
+        if args.encoder and (args.encoder_mode != "quad" or args.no_index):
+            self.lib.fws_encoder(2 if args.encoder_mode == "pulse" else 1, args.encoder, 0 if args.no_index else 1)
+        self.spindle = dict(follow=1, rpm=0.0, accel=3000.0, ripple=0.0, ripple_hz=0.0)
         self.base_us = self.lib.fws_now()
         self.force = {"estop": 0, "probe": 0, "limits": 0, "misc_in": 0, "io_in": 0}
         self.lim_lo = [-4000.0] * AXES
@@ -227,8 +249,13 @@ class FirmwareSim:
                     with self.lock:
                         self.advance()
                         rn = self.lib.fws_tcp(frame, len(frame), resp, len(resp))
+                        restart = self.lib.fws_restart_wanted()
                     if rn > 0:
                         conn.sendall(struct.pack("<H", rn) + resp.raw[:rn])
+                    if restart:
+                        # a controller restarts to take up a new layout or spindle sensor
+                        time.sleep(1.0)
+                        raise ConnectionError("restarting to take up the new settings")
         except (OSError, ConnectionError) as e:
             self.log("TCP session ended: %s" % e)
         finally:
@@ -289,6 +316,25 @@ class FirmwareSim:
                 self.apply_inputs()
             elif cmd == "clear":
                 self.lib.fws_clear_stats()
+            elif cmd == "spindle":
+                sp = self.spindle
+                if "rpm" in req and "follow" not in req:
+                    sp["follow"] = 0
+                for k in sp:
+                    if k in req:
+                        sp[k] = float(req[k]) if k != "follow" else int(req[k])
+                self.lib.fws_spindle(sp["follow"], sp["rpm"], sp["accel"], sp["ripple"], sp["ripple_hz"])
+            elif cmd == "encoder":
+                self.lib.fws_encoder(2 if req.get("mode", "quad") == "pulse" else 1, int(req.get("ppr", 0)),
+                                     int(req.get("index", 1)))
+            elif cmd == "trace":
+                self.lib.fws_trace(int(req.get("axis", 2)))
+            elif cmd == "trace_read":
+                t = (ctypes.c_double * TRACE_MAX)()
+                turns = (ctypes.c_double * TRACE_MAX)()
+                pos = (ctypes.c_int32 * TRACE_MAX)()
+                n = self.lib.fws_trace_read(t, turns, pos, TRACE_MAX)
+                return {"t": list(t[:n]), "turns": list(turns[:n]), "pos": list(pos[:n])}
             elif cmd == "log":
                 return {"log": list(self.log_lines)}
             elif cmd == "hold":
@@ -316,6 +362,9 @@ class FirmwareSim:
                                 drivers=bool(info.drivers), io=info.io),
                 "min_gap_us": [None if g == 0xFFFFFFFF else g for g in info.min_gap_us],
                 "steps": list(info.steps), "isr_calls": info.isr_calls,
+                "sync": info.sync,
+                "spindle": dict(turns=info.spindle_turns, rpm=round(info.spindle_rpm, 3),
+                                tracked_rpm=info.tracked_rpm_milli / 1000.0, index_count=info.index_count),
                 "force": dict(self.force), "stats": dict(self.stats),
                 "cfg": {("0x%04X" % k): self.lib.fws_cfg(k) for k in CFG_INT_KEYS},
             }
@@ -330,7 +379,11 @@ def main():
     ap.add_argument("--reorder", type=float, default=0.0, help="fraction of received UDP packets to delay behind the next")
     ap.add_argument("--fw", default="1.2.0", help="firmware version to report")
     ap.add_argument("--io-module", action="store_true", help="run as an I/O expansion module")
-    ap.add_argument("--encoder", type=int, default=0, metavar="PPR", help="simulate a spindle encoder")
+    ap.add_argument("--encoder", type=int, default=0, metavar="PPR",
+                    help="simulate a spindle with a sensor: an encoder of PPR lines, or PPR pulses per revolution")
+    ap.add_argument("--encoder-mode", choices=("quad", "pulse"), default="quad",
+                    help="quad: quadrature encoder (default); pulse: a single pulse sensor")
+    ap.add_argument("--no-index", action="store_true", help="quadrature encoder without an index pulse")
     ap.add_argument("--lib", default="", help="path of fwsim.dll / libfwsim.so")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
