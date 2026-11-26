@@ -80,7 +80,7 @@ Everything in this section is done in Mach3's **Config** menu. The Tiggy window 
 **Config > Ports and Pins > Motor Outputs**
 
 - Tick **Enabled** for each axis you use.
-- The Step Pin, Dir Pin and Port numbers in this table are not used: each motor driver is wired to its own terminals on the controller (shown in the "Step, Dir" column of the Tiggy window's Machine tab).
+- The Step Pin, Dir Pin and Port numbers in this table are not yours to choose: each motor driver is wired to its own terminals on the controller. The plugin reads those from the controller and enters them here (Port 1, and 0 for an axis the controller has no terminals for), so the table shows what is really wired; change them and it puts them back at the next connection. The same numbers are in the "Step, Dir" column of the Tiggy window's Machine tab.
 - Tick **Dir LowActive** if an axis moves the wrong way. **Step Low Active** selects step pulses that are low instead of high.
 
 **Config > Motor Tuning**
