@@ -1,0 +1,560 @@
+/*
+ * Firmware-in-a-DLL: the controller's motion core and step engine, built
+ * for the PC, with a simulated machine in place of the hardware.
+ *
+ * tools/firmware_sim.py loads this and puts it behind real UDP and TCP
+ * sockets, so the protocol conformance tests and the host software (the
+ * Mach3 plugin, LinuxCNC) can be run against the firmware's own logic
+ * without a board.
+ *
+ * Everything here is called from one thread.
+ */
+
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "../../main/motion/motion_core.h"
+#include "../../main/motion/step_engine.h"
+#include "se_port.h"
+
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT __attribute__((visibility("default")))
+#endif
+
+#define AXES WCNC_MAX_AXES
+
+/* ------------------------------------------------------------------ clock */
+uint64_t pc_now_us = 1000000;
+uint64_t pc_alarm_us = 0;
+bool     pc_alarm_set = false;
+static uint64_t s_last_tick_us = 1000000;
+
+/* ---------------------------------------------------------- machine model */
+static struct {
+    int64_t  phys[AXES];            /* steps made since start; never zeroed by homing */
+    bool     dir_neg[AXES];
+    double   lim_lo[AXES], lim_hi[AXES];
+    bool     probe_z_valid;
+    double   probe_z;
+    int      force_estop, force_probe, force_limits, force_misc_in, force_io_in;
+    /* pulse statistics */
+    uint64_t last_step_us[AXES];
+    uint32_t min_gap_us[AXES];
+    uint64_t steps[AXES];
+    uint64_t isr_calls;
+    /* outputs */
+    mc_outputs_t out;
+    double   duty;
+    bool     drivers;
+    bool     io_module;
+    int      encoder_ppr;
+    uint32_t fw_version;
+    char     log[4096];
+    size_t   log_len;
+} m;
+
+void pc_set_dir(int axis, bool negative) { m.dir_neg[axis] = negative; }
+
+void pc_step(uint8_t mask)
+{
+    for (int i = 0; i < AXES; i++) {
+        if (!(mask & (1u << i))) continue;
+        m.phys[i] += m.dir_neg[i] ? -1 : 1;
+        if (m.steps[i]) {
+            uint64_t gap = pc_now_us - m.last_step_us[i];
+            if (gap < m.min_gap_us[i]) m.min_gap_us[i] = (uint32_t)gap;
+        }
+        m.last_step_us[i] = pc_now_us;
+        m.steps[i]++;
+    }
+}
+
+bool pc_limit_active(int input)
+{
+    if (input < 0 || input >= AXES) return false;
+    if (m.force_limits & (1 << input)) return true;
+    return (double)m.phys[input] <= m.lim_lo[input] || (double)m.phys[input] >= m.lim_hi[input];
+}
+
+bool pc_probe_active(void)
+{
+    return m.force_probe || (m.probe_z_valid && (double)m.phys[2] <= m.probe_z);
+}
+
+/* ------------------------------------------------------------ config store */
+typedef struct { uint16_t key; uint16_t type; uint32_t u; float f; char s[WCNC_CONFIG_VALUE_LEN]; } cfg_item_t;
+static cfg_item_t s_cfg[160];
+static int s_cfg_count = 0;
+
+static cfg_item_t *cfg_find(uint16_t key)
+{
+    for (int i = 0; i < s_cfg_count; i++)
+        if (s_cfg[i].key == key) return &s_cfg[i];
+    return NULL;
+}
+
+static void cfg_def(uint16_t key, uint16_t type, uint32_t u, float f)
+{
+    cfg_item_t *c = cfg_find(key);
+    if (!c) c = &s_cfg[s_cfg_count++];
+    memset(c, 0, sizeof(*c));
+    c->key = key; c->type = type; c->u = u; c->f = f;
+}
+
+static uint32_t cfg_u(uint16_t key)
+{
+    cfg_item_t *c = cfg_find(key);
+    return c ? c->u : 0;
+}
+
+static void cfg_defaults(void)
+{
+    static const uint8_t pins[] = { 1, 2, 42, 41, 40, 39,  3, 4, 38, 33, 34, 35,  8,
+                                    5, 6, 7, 15, 16, 17,  14, 13, 9, 48, 10, 11, 12, 0xFF, 0xFF, 0xFF };
+    s_cfg_count = 0;
+    for (int i = 0; i < AXES; i++) {
+        cfg_def((uint16_t)(WCNC_CFG_STEPS_PER_MM_X + i), WCNC_VAL_FLOAT, 0, 800.0f);
+        cfg_def((uint16_t)(WCNC_CFG_MAX_RATE_X + i), WCNC_VAL_UINT32, 20000, 0);
+        cfg_def((uint16_t)(WCNC_CFG_ACCEL_X + i), WCNC_VAL_UINT32, 5000, 0);
+    }
+    cfg_def(WCNC_CFG_STEP_PULSE_US, WCNC_VAL_UINT16, 3, 0);
+    cfg_def(WCNC_CFG_DIR_SETUP_US, WCNC_VAL_UINT16, 2, 0);
+    cfg_def(WCNC_CFG_STEP_IDLE_DELAY_MS, WCNC_VAL_UINT16, 255, 0);
+    cfg_def(WCNC_CFG_STATUS_INTERVAL_MS, WCNC_VAL_UINT16, 50, 0);
+    cfg_def(WCNC_CFG_INVERT_STEP, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_INVERT_DIR, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_INVERT_ENABLE, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_INVERT_LIMIT, WCNC_VAL_UINT8, 0x3F, 0);
+    cfg_def(WCNC_CFG_INVERT_HOME, WCNC_VAL_UINT8, 0x3F, 0);
+    cfg_def(WCNC_CFG_INVERT_ESTOP, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_INVERT_PROBE, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_LIMIT_ENABLE_MASK, WCNC_VAL_UINT8, 0x3F, 0);
+    cfg_def(WCNC_CFG_INPUT_DEBOUNCE_MS, WCNC_VAL_UINT16, 5, 0);
+    cfg_def(WCNC_CFG_HOMING_DIR_MASK, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_HOMING_SEEK_RATE, WCNC_VAL_UINT32, 5000, 0);
+    cfg_def(WCNC_CFG_HOMING_FEED_RATE, WCNC_VAL_UINT32, 500, 0);
+    cfg_def(WCNC_CFG_HOMING_PULLOFF, WCNC_VAL_UINT32, 100, 0);
+    cfg_def(WCNC_CFG_CHARGE_PUMP_FREQ, WCNC_VAL_UINT16, 10000, 0);
+    cfg_def(WCNC_CFG_SPINDLE_PWM_FREQ, WCNC_VAL_UINT16, 1000, 0);
+    cfg_def(WCNC_CFG_SPINDLE_MAX_RPM, WCNC_VAL_UINT32, 24000, 0);
+    cfg_def(WCNC_CFG_SPINDLE_PWM_ENABLE, WCNC_VAL_UINT8, 0, 0);
+    cfg_def(WCNC_CFG_SPINDLE_MIN_DUTY, WCNC_VAL_UINT8, 0, 0);
+    for (int i = 0; i < (int)sizeof(pins); i++)
+        cfg_def((uint16_t)(WCNC_CFG_PIN_STEP_X + i), WCNC_VAL_UINT8, pins[i], 0);
+    cfg_def(WCNC_CFG_PIN_ENCODER_A, WCNC_VAL_UINT8, 0xFF, 0);
+    cfg_def(WCNC_CFG_PIN_ENCODER_B, WCNC_VAL_UINT8, 0xFF, 0);
+    cfg_def(WCNC_CFG_PIN_ENCODER_INDEX, WCNC_VAL_UINT8, 0xFF, 0);
+    cfg_def(WCNC_CFG_PIN_MISC_IN0, WCNC_VAL_UINT8, 18, 0);
+    cfg_def(WCNC_CFG_PIN_MISC_IN1, WCNC_VAL_UINT8, 21, 0);
+    cfg_def(WCNC_CFG_PIN_MISC_IN2, WCNC_VAL_UINT8, 36, 0);
+    cfg_def(WCNC_CFG_PIN_MISC_IN3, WCNC_VAL_UINT8, 0xFF, 0);
+}
+
+static void apply_timing(void)
+{
+    se_set_timing(cfg_u(WCNC_CFG_STEP_PULSE_US), cfg_u(WCNC_CFG_DIR_SETUP_US));
+}
+
+/* ------------------------------------------------------------------ outbox */
+typedef struct { uint32_t ip; uint16_t port; uint16_t len; uint8_t data[256]; } dgram_t;
+static dgram_t s_out[64];
+static int s_out_head = 0, s_out_tail = 0;
+
+/* --------------------------------------------------------- core's platform */
+uint32_t mc_hal_ms(void) { return (uint32_t)(pc_now_us / 1000u); }
+
+void mc_hal_load_config(mc_config_t *c)
+{
+    memset(c, 0, sizeof(*c));
+    for (int i = 0; i < AXES; i++) {
+        c->max_rate[i] = cfg_u((uint16_t)(WCNC_CFG_MAX_RATE_X + i));
+        c->accel[i] = cfg_u((uint16_t)(WCNC_CFG_ACCEL_X + i));
+    }
+    c->limit_enable_mask = (uint8_t)cfg_u(WCNC_CFG_LIMIT_ENABLE_MASK);
+    c->homing_dir_mask = (uint8_t)cfg_u(WCNC_CFG_HOMING_DIR_MASK);
+    c->homing_seek_rate = cfg_u(WCNC_CFG_HOMING_SEEK_RATE);
+    c->homing_feed_rate = cfg_u(WCNC_CFG_HOMING_FEED_RATE);
+    c->homing_pulloff = cfg_u(WCNC_CFG_HOMING_PULLOFF);
+    c->idle_release_ms = (uint16_t)cfg_u(WCNC_CFG_STEP_IDLE_DELAY_MS);
+    c->status_interval_ms = (uint16_t)cfg_u(WCNC_CFG_STATUS_INTERVAL_MS);
+    c->io_module = m.io_module;
+}
+
+uint8_t mc_hal_limit_inputs(void)
+{
+    uint8_t mask = 0;
+    for (int i = 0; i < AXES; i++)
+        if (pc_limit_active(i)) mask |= (uint8_t)(1u << i);
+    return mask;
+}
+
+bool mc_hal_probe_input(void) { return pc_probe_active(); }
+bool mc_hal_estop_input(void) { return m.force_estop != 0; }
+
+void mc_hal_apply_outputs(const mc_outputs_t *out)
+{
+    m.out = *out;
+    uint32_t max_rpm = cfg_u(WCNC_CFG_SPINDLE_MAX_RPM);
+    if (!max_rpm) max_rpm = 1;
+    if (!out->spindle) {
+        m.duty = 0.0;
+    } else if (cfg_u(WCNC_CFG_SPINDLE_PWM_ENABLE)) {
+        double duty = (double)out->rpm / (double)max_rpm;
+        double floor_ = cfg_u(WCNC_CFG_SPINDLE_MIN_DUTY) / 100.0;
+        if (duty > 1.0) duty = 1.0;
+        m.duty = duty < floor_ ? floor_ : duty;
+    } else {
+        m.duty = 1.0;
+    }
+}
+
+void mc_hal_drivers(bool enabled) { m.drivers = enabled; }
+
+void mc_hal_udp_send(uint32_t ip, uint16_t port, const void *data, size_t len)
+{
+    int next = (s_out_head + 1) % 64;
+    if (next == s_out_tail || len > sizeof(s_out[0].data)) return;
+    s_out[s_out_head].ip = ip;
+    s_out[s_out_head].port = port;
+    s_out[s_out_head].len = (uint16_t)len;
+    memcpy(s_out[s_out_head].data, data, len);
+    s_out_head = next;
+}
+
+static double s_spindle_turns = 0.0;
+static uint64_t s_spindle_us = 0;
+
+void mc_hal_fill_status(wcnc_status_report_t *r)
+{
+    uint8_t lim = mc_hal_limit_inputs();
+    r->limit_switches = lim;
+    r->home_switches = lim;
+    r->probe_state = pc_probe_active() ? 1 : 0;
+    r->estop_input = m.force_estop ? 1 : 0;
+    r->flags |= WCNC_STATUS_WIFI_CONNECTED;
+    r->uptime_ms = (uint32_t)(pc_now_us / 1000u);
+    r->misc_inputs = (uint8_t)(m.force_misc_in & 0x0F);
+    r->io_inputs = (uint16_t)m.force_io_in;
+    if (m.encoder_ppr) {
+        double rpm = m.out.spindle ? (double)m.out.rpm : 0.0;
+        s_spindle_turns += rpm / 60.0 * (double)(pc_now_us - s_spindle_us) / 1.0e6;
+        s_spindle_us = pc_now_us;
+        r->spindle_rpm = (uint16_t)(rpm > 65535.0 ? 65535.0 : rpm);
+        r->spindle_position = (uint16_t)((s_spindle_turns - floor(s_spindle_turns)) * 65535.0);
+        r->spindle_index_count = (uint32_t)s_spindle_turns;
+    }
+}
+
+static uint8_t capabilities(void)
+{
+    if (m.io_module) return WCNC_CAP_IO_MODULE | WCNC_CAP_STREAM_V2;
+    uint8_t caps = WCNC_CAP_CHARGE_PUMP | WCNC_CAP_MISC_OUTPUTS | WCNC_CAP_MISC_INPUTS | WCNC_CAP_SPINDLE_PWM;
+    if (m.fw_version >= WCNC_MAKE_VERSION(1, 2, 0)) caps |= WCNC_CAP_STREAM_V2;
+    if (m.encoder_ppr) caps |= WCNC_CAP_SPINDLE_ENCODER;
+    return caps;
+}
+
+static const char *device_name(void)
+{
+    return m.io_module ? "Tiggy I/O Module (firmware sim)" : "Tiggy (firmware sim)";
+}
+
+void mc_hal_identity(uint8_t *caps, uint8_t mac[6], char name[WCNC_DEVICE_NAME_LEN])
+{
+    static const uint8_t fake[6] = { 0x02, 0x00, 'F', 'W', 'S', 1 };
+    *caps = capabilities();
+    memcpy(mac, fake, 6);
+    strncpy(name, device_name(), WCNC_DEVICE_NAME_LEN - 1);
+}
+
+/* Old-form segments: a small queue standing in for the firmware's planner buffer */
+static wcnc_motion_segment_t s_legacy[64];
+static int s_leg_head = 0, s_leg_tail = 0;
+
+bool mc_hal_legacy_pop(wcnc_motion_segment_t *seg)
+{
+    if (s_leg_tail == s_leg_head) return false;
+    *seg = s_legacy[s_leg_tail];
+    s_leg_tail = (s_leg_tail + 1) % 64;
+    return true;
+}
+
+bool mc_hal_legacy_push(const wcnc_motion_segment_t *seg)
+{
+    int next = (s_leg_head + 1) % 64;
+    if (next == s_leg_tail) return false;
+    s_legacy[s_leg_head] = *seg;
+    s_leg_head = next;
+    return true;
+}
+
+void mc_hal_legacy_clear(void) { s_leg_head = s_leg_tail = 0; }
+
+void mc_hal_log(const char *text)
+{
+    size_t n = strlen(text);
+    if (m.log_len + n + 2 >= sizeof(m.log)) m.log_len = 0;
+    memcpy(m.log + m.log_len, text, n);
+    m.log_len += n;
+    m.log[m.log_len++] = '\n';
+    m.log[m.log_len] = '\0';
+}
+
+/* ===================================================================
+ * Exported to the Python front end
+ * =================================================================== */
+
+EXPORT void fws_init(int io_module, int encoder_ppr, uint32_t fw_version)
+{
+    memset(&m, 0, sizeof(m));
+    m.io_module = io_module != 0;
+    m.encoder_ppr = encoder_ppr;
+    m.fw_version = fw_version ? fw_version : WCNC_FIRMWARE_VERSION;
+    for (int i = 0; i < AXES; i++) {
+        m.lim_lo[i] = -4000.0;
+        m.lim_hi[i] = 200000.0;
+        m.min_gap_us[i] = 0xFFFFFFFFu;
+    }
+    pc_alarm_set = false;
+    s_out_head = s_out_tail = 0;
+    s_leg_head = s_leg_tail = 0;
+    s_spindle_us = pc_now_us;
+    cfg_defaults();
+    se_init();
+    apply_timing();
+    mc_init();
+}
+
+/* Advance the clock to now_us, running the step interrupt and the 1 ms tick
+ * at the moments they fall due. */
+EXPORT void fws_run(uint64_t now_us)
+{
+    for (;;) {
+        uint64_t next = s_last_tick_us + 1000u;
+        bool isr = false;
+        if (pc_alarm_set && pc_alarm_us <= next) {
+            next = pc_alarm_us;
+            isr = true;
+        }
+        if (next > now_us) break;
+        if (pc_now_us < next) pc_now_us = next;
+        if (isr) {
+            pc_alarm_set = false;
+            pc_now_us += 2;                 /* interrupt entry */
+            m.isr_calls++;
+            se_isr();
+        } else {
+            s_last_tick_us += 1000u;
+            mc_tick();
+        }
+    }
+    if (pc_now_us < now_us) pc_now_us = now_us;
+}
+
+EXPORT uint64_t fws_now(void) { return pc_now_us; }
+
+EXPORT void fws_udp(const uint8_t *data, int len, uint32_t ip, uint16_t port)
+{
+    mc_on_udp(data, (size_t)len, ip, port);
+}
+
+EXPORT void fws_tcp_session(uint32_t ip) { mc_tcp_session(ip); }
+
+/* One TCP frame in, at most one frame out.  Returns the reply length. */
+EXPORT int fws_tcp(const uint8_t *data, int len, uint8_t *resp, int resp_size)
+{
+    static uint32_t seq = 0;
+    if (len < (int)sizeof(wcnc_header_t) || resp_size < 128) return 0;
+    uint8_t copy[512];
+    if (len > (int)sizeof(copy)) return 0;
+    memcpy(copy, data, (size_t)len);
+    wcnc_header_t hdr;
+    memcpy(&hdr, copy, sizeof(hdr));
+    if (len < (int)(sizeof(hdr) + hdr.payload_length) ||
+        !wcnc_validate_packet(copy, sizeof(hdr) + hdr.payload_length))
+        return 0;
+    uint32_t ts = (uint32_t)(pc_now_us / 1000u);
+
+    switch (hdr.packet_type) {
+    case WCNC_PKT_HANDSHAKE_REQ: {
+        wcnc_handshake_resp_t r;
+        memset(&r, 0, sizeof(r));
+        r.firmware_version = m.fw_version;
+        r.num_axes = AXES;
+        r.capabilities = capabilities();
+        r.buffer_capacity = SE_QUEUE_SIZE - 1;
+        r.max_step_rate = mc_max_step_rate();
+        strncpy(r.device_name, device_name(), sizeof(r.device_name) - 1);
+        r.device_mode = m.io_module ? 1 : 0;
+        r.encoder_ppr_hi = (uint8_t)(m.encoder_ppr >> 8);
+        r.encoder_ppr_lo = (uint8_t)m.encoder_ppr;
+        r.io_channel_count = m.io_module ? 16 : 0;
+        wcnc_finalize_packet(&r, WCNC_PKT_HANDSHAKE_RESP, sizeof(r) - sizeof(wcnc_header_t), seq++, ts);
+        memcpy(resp, &r, sizeof(r));
+        return (int)sizeof(r);
+    }
+    case WCNC_PKT_PING: {
+        wcnc_ping_packet_t p;
+        memset(&p, 0, sizeof(p));
+        if (len >= (int)sizeof(p)) memcpy(&p.ping_id, copy + sizeof(hdr), 4);
+        wcnc_finalize_packet(&p, WCNC_PKT_PONG, sizeof(p) - sizeof(wcnc_header_t), seq++, ts);
+        memcpy(resp, &p, sizeof(p));
+        return (int)sizeof(p);
+    }
+    case WCNC_PKT_CONFIG_GET: {
+        if (len < (int)sizeof(wcnc_config_packet_t)) return 0;
+        wcnc_config_packet_t q, r;
+        memcpy(&q, copy, sizeof(q));
+        memset(&r, 0, sizeof(r));
+        r.key = q.key;
+        cfg_item_t *c = cfg_find(q.key);
+        if (c) {
+            r.value_type = c->type;
+            if (c->type == WCNC_VAL_FLOAT) memcpy(r.value, &c->f, 4);
+            else if (c->type == WCNC_VAL_STRING) memcpy(r.value, c->s, sizeof(r.value));
+            else memcpy(r.value, &c->u, 4);
+        } else {
+            r.value_type = WCNC_VAL_UINT8;
+            r.value[0] = (q.key >= 0x0500 && q.key < 0x0600) ? 0xFF : 0;
+        }
+        wcnc_finalize_packet(&r, WCNC_PKT_CONFIG_RESP, sizeof(r) - sizeof(wcnc_header_t), seq++, ts);
+        memcpy(resp, &r, sizeof(r));
+        return (int)sizeof(r);
+    }
+    case WCNC_PKT_CONFIG_SET:
+        if (len >= (int)sizeof(wcnc_config_packet_t)) {
+            wcnc_config_packet_t q;
+            memcpy(&q, copy, sizeof(q));
+            cfg_item_t *c = cfg_find(q.key);
+            if (!c && s_cfg_count < (int)(sizeof(s_cfg) / sizeof(s_cfg[0]))) {
+                c = &s_cfg[s_cfg_count++];
+                memset(c, 0, sizeof(*c));
+                c->key = q.key;
+                c->type = q.value_type;
+            }
+            if (c && c->type == q.value_type) {
+                c->u = 0;
+                if (c->type == WCNC_VAL_FLOAT) memcpy(&c->f, q.value, 4);
+                else if (c->type == WCNC_VAL_STRING) memcpy(c->s, q.value, sizeof(c->s));
+                else if (c->type == WCNC_VAL_UINT8) c->u = q.value[0];
+                else if (c->type == WCNC_VAL_UINT16) memcpy(&c->u, q.value, 2);
+                else memcpy(&c->u, q.value, 4);
+                apply_timing();
+                mc_config_changed();
+            }
+        }
+        /* fall through: acknowledged like a save */
+    case WCNC_PKT_CONFIG_SAVE: {
+        wcnc_ack_packet_t a;
+        memset(&a, 0, sizeof(a));
+        a.acked_sequence = hdr.sequence;
+        a.acked_type = hdr.packet_type;
+        wcnc_finalize_packet(&a, WCNC_PKT_ACK, sizeof(a) - sizeof(wcnc_header_t), seq++, ts);
+        memcpy(resp, &a, sizeof(a));
+        return (int)sizeof(a);
+    }
+    default:
+        return 0;
+    }
+}
+
+/* Next datagram the firmware wants sent.  Returns its length, 0 if none. */
+EXPORT int fws_outbox(uint8_t *buf, int size, uint32_t *ip, uint16_t *port)
+{
+    if (s_out_tail == s_out_head) return 0;
+    dgram_t *d = &s_out[s_out_tail];
+    s_out_tail = (s_out_tail + 1) % 64;
+    if (d->len > size) return 0;
+    memcpy(buf, d->data, d->len);
+    *ip = d->ip;
+    *port = d->port;
+    return d->len;
+}
+
+EXPORT void fws_set_inputs(int estop, int probe, int limits, int misc_in, int io_in)
+{
+    m.force_estop = estop;
+    m.force_probe = probe;
+    m.force_limits = limits;
+    m.force_misc_in = misc_in;
+    m.force_io_in = io_in;
+}
+
+EXPORT void fws_set_limits(const double lo[AXES], const double hi[AXES])
+{
+    for (int i = 0; i < AXES; i++) { m.lim_lo[i] = lo[i]; m.lim_hi[i] = hi[i]; }
+}
+
+EXPORT void fws_set_probe_z(int valid, double z)
+{
+    m.probe_z_valid = valid != 0;
+    m.probe_z = z;
+}
+
+EXPORT void fws_set_phys(const double phys[AXES])
+{
+    for (int i = 0; i < AXES; i++) m.phys[i] = (int64_t)phys[i];
+}
+
+typedef struct {
+    double   phys[AXES];
+    int32_t  pos[AXES];
+    int32_t  state, alarm;
+    int32_t  misc, spindle, rpm, coolant, charge_pump, drivers, io;
+    double   duty;
+    uint32_t queued_us, queue_count;
+    uint32_t min_gap_us[AXES];
+    uint64_t steps[AXES];
+    uint64_t isr_calls;
+    uint32_t feed;
+    int32_t  busy;
+} fws_info_t;
+
+EXPORT void fws_get(fws_info_t *o)
+{
+    memset(o, 0, sizeof(*o));
+    se_get_position(o->pos);
+    for (int i = 0; i < AXES; i++) {
+        o->phys[i] = (double)m.phys[i];
+        o->min_gap_us[i] = m.min_gap_us[i];
+        o->steps[i] = m.steps[i];
+    }
+    o->state = (int32_t)mc_state();
+    o->alarm = mc_alarm();
+    o->misc = m.out.misc; o->spindle = m.out.spindle; o->rpm = m.out.rpm; o->coolant = m.out.coolant;
+    o->charge_pump = m.out.charge_pump; o->drivers = m.drivers; o->io = m.out.io;
+    o->duty = m.duty;
+    o->queued_us = se_queued_us();
+    o->queue_count = se_count();
+    o->isr_calls = m.isr_calls;
+    o->feed = se_feed_rate();
+    o->busy = mc_busy();
+}
+
+EXPORT void fws_clear_stats(void)
+{
+    for (int i = 0; i < AXES; i++) { m.min_gap_us[i] = 0xFFFFFFFFu; m.steps[i] = 0; }
+    m.isr_calls = 0;
+}
+
+EXPORT uint32_t fws_cfg(uint16_t key) { return cfg_u(key); }
+
+EXPORT int fws_log(char *buf, int size)
+{
+    int n = (int)m.log_len < size - 1 ? (int)m.log_len : size - 1;
+    memcpy(buf, m.log, (size_t)n);
+    buf[n] = '\0';
+    m.log_len = 0;
+    return n;
+}
+
+/* Local control, as the G-code interface uses it */
+EXPORT int  fws_legacy_push(const wcnc_motion_segment_t *seg) { return mc_hal_legacy_push(seg) ? 1 : 0; }
+EXPORT void fws_feed_hold(void)   { mc_feed_hold(); }
+EXPORT void fws_feed_resume(void) { mc_feed_resume(); }
+EXPORT int  fws_home(int mask)    { return mc_home((uint8_t)mask) ? 1 : 0; }
+EXPORT void fws_estop(void)       { mc_estop(); }
+EXPORT int  fws_reset(void)       { return mc_reset() ? 1 : 0; }
