@@ -66,9 +66,14 @@ later. In practice:
 - **Probing** (G38.x): the same applies. Probe slowly: at 60 mm/min the machine
   travels on 0.25 mm after contact and the result repeats to about 0.01 mm.
 - **Limit switches** given to the wizard as limits stop the controller itself
-  within milliseconds; LinuxCNC is then told and goes into E-stop. (While an
-  axis stands on its switch, or one is being homed, the controller leaves all
-  the limits to LinuxCNC, which reacts about a quarter of a second later.)
+  within milliseconds; LinuxCNC is then told and goes into E-stop. While an
+  axis stands on its switch, or one is being homed, the controller's limit
+  stop stands aside, so that the axis can be homed and jogged off again.
+- **A switch that is both home and limit** is wired to LinuxCNC as the home
+  switch only (do not also connect it to `joint.N.neg-lim-sw-in` /
+  `pos-lim-sw-in`). The machine is still leaving the switch when LinuxCNC has
+  finished homing, and LinuxCNC would report a limit at that moment. The
+  controller's own stop guards the limit instead.
 - Spindle-synchronised motion (G33, G76 threading, rigid tapping) is not
   supported.
 

@@ -357,7 +357,7 @@ def write_ini(m, path, buffer_ms=200):
             w("HOME_LATCH_VEL = %s" % fmt(sign * min(small, search)))
             w("HOME_OFFSET = %s" % fmt(edge))
             w("HOME = %s" % fmt(edge - sign * 2.0 * small))
-            w("HOME_IGNORE_LIMITS = %s" % ("YES" if j["limit_switch"] else "NO"))
+            w("HOME_IGNORE_LIMITS = NO")
         else:
             w("# No home switch: homing takes the present position as %s." % fmt(0.0))
             w("HOME_SEARCH_VEL = 0")
@@ -431,17 +431,25 @@ def write_hal(m, path):
         w("net %s-pos-fb  tiggy.%d.position-fb   => joint.%d.motor-pos-fb" % (tag, n, n))
         w("net %s-homing  joint.%d.homing        => tiggy.%d.homing" % (tag, n, n))
         if j["home_switch"] or j["limit_switch"]:
-            users = []
+            # A switch used for homing is not also given to LinuxCNC as a limit:
+            # the machine runs a moment behind LinuxCNC, so it is still leaving
+            # the switch when LinuxCNC has finished homing and would then report
+            # a limit.  The controller guards such a switch itself instead.
             if j["home_switch"]:
-                users.append("joint.%d.home-sw-in" % n)
-            if j["limit_switch"]:
-                users += ["joint.%d.neg-lim-sw-in" % n, "joint.%d.pos-lim-sw-in" % n]
+                users = ["joint.%d.home-sw-in" % n]
+            else:
+                users = ["joint.%d.neg-lim-sw-in" % n, "joint.%d.pos-lim-sw-in" % n]
             own = j["switch_input"] == n
             source = "tiggy.switch.%d => " % n if own else ""       # a shared switch is already on its net
             name = tag if own else j["letter"].lower()
             w("net %s-switch  %s%s" % (name, source, " ".join(users)))
             if j["limit_switch"] and own:
-                w("# the controller itself stops, within milliseconds, when this switch operates")
+                if j["home_switch"]:
+                    w("# Also the limit switch: the controller itself stops, within milliseconds, when")
+                    w("# it operates outside homing, and LinuxCNC then goes into E-stop.  (LinuxCNC is")
+                    w("# not given it as a limit: see the note on limit switches in the driver's README.)")
+                else:
+                    w("# the controller itself stops, within milliseconds, when this switch operates")
                 w("setp tiggy.switch.%d-is-limit 1" % n)
         w("")
     w("# --- spindle and coolant ---")

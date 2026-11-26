@@ -313,6 +313,8 @@ class Session:
         self.mdi("G53 G0 X20 Y20 Z-10")
         self.c.mode(linuxcnc.MODE_MANUAL)
         self.c.wait_complete()
+        self.c.teleop_enable(0)             # joints can only be un-homed in joint mode
+        self.c.wait_complete()
         for j in range(JOINTS):
             self.c.unhome(j)
         self.c.wait_complete()
