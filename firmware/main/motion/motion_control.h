@@ -1,38 +1,48 @@
 /*
- * WiFi CNC Controller - Motion Control Task
+ * WiFi CNC Controller - Motion task
  *
- * Bridges the planner ring buffer and the stepper engine. Runs on Core 1.
- * Pops segments from the buffer and feeds them to the stepper ISR.
+ * One task owns the motion core (motion_core.h) and the step engine.
+ * Everything else talks to it through the functions below, which hand the
+ * work over to that task: datagrams from the network, the state of the TCP
+ * session, and the local commands used by G-code mode.
  */
 
 #ifndef MOTION_CONTROL_H
 #define MOTION_CONTROL_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "../../../protocol/wifi_cnc_protocol.h"
 
-/* FreeRTOS task function - runs on Core 1 */
+/* Create the queue the functions below use.  Call before starting tasks. */
+void motion_control_init(void);
+
+/* The motion task (pin it to the core that should run the step interrupt). */
 void motion_control_task(void *pvParameters);
 
-/* Get current machine state */
-wcnc_machine_state_t motion_get_state(void);
+/* --- From the network tasks --- */
+/* A datagram for the motion port.  ip is in network byte order. */
+void motion_post_udp(const uint8_t *data, size_t len, uint32_t ip, uint16_t port);
+/* The TCP control connection was made by ip (0: it has ended). */
+void motion_tcp_session(uint32_t ip);
+/* True if the host that owns the controller has been heard from lately. */
+bool motion_host_active(void);
+/* A setting changed: apply it. */
+void motion_config_changed(void);
 
-/* Trigger E-Stop from any context */
+/* --- Local commands (G-code mode); these return when carried out --- */
 void motion_estop(void);
-
-/* Reset from E-Stop / alarm state */
 void motion_reset(void);
-
-/* Feed hold / resume */
 void motion_feed_hold(void);
 void motion_feed_resume(void);
-
-/* Start homing cycle for specified axes (bitmask) */
 void motion_home(uint8_t axis_mask);
 
-/* Check if homing is in progress */
-bool motion_is_homing(void);
+/* --- State --- */
+uint8_t motion_capabilities(void);          /* WCNC_CAP_* of this device */
+wcnc_machine_state_t motion_get_state(void);
+
+bool    motion_is_homing(void);
 uint8_t motion_homing_state(void);
 
 #endif /* MOTION_CONTROL_H */

@@ -116,19 +116,25 @@ static void rpm_timer_callback(void *arg)
             s_current_rpm = 0;
         }
     } else {
-        /* Estimate RPM from PCNT count rate */
+        /* Estimate RPM from the count rate.  The hardware counter starts
+         * again from zero each revolution, so work with the total: whole
+         * revolutions plus the count within the current one.  (A revolution
+         * may complete between the two reads; read again if it did.) */
         int64_t dt_us = now - s_last_time_us;
+        int32_t revs = s_revolution_count;
+        pcnt_unit_get_count(s_pcnt_unit, &count);
+        if (revs != s_revolution_count) {
+            revs = s_revolution_count;
+            pcnt_unit_get_count(s_pcnt_unit, &count);
+        }
+        int total = revs * (int)s_ppr + count;
         if (dt_us > 0 && s_ppr > 0) {
-            int delta = count - s_last_count;
-            /* Handle wrap-around from watchpoints */
-            int32_t total_counts = delta + (s_revolution_count * (int32_t)s_ppr);
-            /* counts per second = delta / (dt_us / 1000000) */
-            /* RPM = (counts_per_sec / ppr) * 60 */
+            int delta = total - s_last_count;
             double cps = (double)abs(delta) * 1000000.0 / (double)dt_us;
             double rpm = (cps / (double)s_ppr) * 60.0;
             s_current_rpm = (uint16_t)fmin(rpm, 65535.0);
-            (void)total_counts;
         }
+        count = total;
     }
 
     s_last_count = count;
@@ -281,7 +287,9 @@ bool spindle_encoder_init(void)
             .intr_type = GPIO_INTR_POSEDGE,
         };
         gpio_config(&idx_conf);
+        gpio_install_isr_service(0);            /* does nothing if it is installed already */
         gpio_isr_handler_add(pin_index, index_pulse_isr, NULL);
+
         ESP_LOGI(TAG, "Index pulse on GPIO %d", pin_index);
     }
 
@@ -331,6 +339,9 @@ uint16_t spindle_encoder_get_position(void)
 
 uint32_t spindle_encoder_get_index_count(void)
 {
-    return s_index_count;
+    /* With an index input: its pulses.  Without one (index-only mode, where
+     * the pulse itself is what is counted): whole revolutions counted. */
+    if (s_has_index) return s_index_count;
+    int32_t revs = s_revolution_count;
+    return (uint32_t)(revs < 0 ? -revs : revs);
 }
-

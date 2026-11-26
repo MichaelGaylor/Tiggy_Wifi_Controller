@@ -34,6 +34,9 @@ uint16_t planner_count(void);
 /* Flush all segments (used during E-Stop) */
 void planner_clear(void);
 
+/* Drop everything queued at once. Only for the task that pops segments. */
+void planner_drain(void);
+
 /* Check if buffer is empty */
 bool planner_is_empty(void);
 

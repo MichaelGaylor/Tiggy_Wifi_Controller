@@ -11,6 +11,9 @@ idf_component_register(
     SRCS
         "main.c"
         "motion/stepper.c"
+        "motion/step_engine.c"
+        "motion/timed_exec.c"
+        "motion/motion_core.c"
         "motion/motion_control.c"
         "motion/planner.c"
         "network/wifi_manager.c"
@@ -36,7 +39,9 @@ idf_component_register(
     INCLUDE_DIRS
         "."
         "motion"
+        "motion/port"
         "network"
+
         "io"
         "status"
         "persist"

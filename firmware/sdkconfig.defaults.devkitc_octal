@@ -58,3 +58,8 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
 # Log level: Info (show startup and guard diagnostics on serial)
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL=2
+
+# Step timer: keep the interrupt and the timer control functions in RAM, so
+# that step pulses keep their timing while flash is being written
+CONFIG_GPTIMER_ISR_IRAM_SAFE=y
+CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y

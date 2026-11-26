@@ -273,7 +273,18 @@ static void emit_block(gcode_planner_t *planner, float exit_speed)
     seg.flags = block->flags;
     seg.segment_id = block->segment_id;
 
+    /* The time the block would take at its programmed speed: this is what
+     * tells the motion code how fast it may cruise (it works out the ramps
+     * to and from the entry and exit speeds itself). */
+    float nominal_sps = block->nominal_speed * mm_to_steps;
+    if (nominal_sps >= 1.0f) {
+        float us = (float)block->step_event_count / nominal_sps * 1.0e6f;
+        seg.duration_us = us >= 4.0e9f ? 4000000000u : (uint32_t)us;
+        if (seg.duration_us == 0) seg.duration_us = 1;
+    }
+
     /* Push to ring buffer — block if full, yield to other tasks */
+
     while (!planner->preempted) {
         if (planner_push_segment(&seg)) break;
         vTaskDelay(pdMS_TO_TICKS(1));

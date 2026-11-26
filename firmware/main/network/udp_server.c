@@ -1,14 +1,15 @@
 /*
  * WiFi CNC Controller - UDP Server
  *
- * Listens on WCNC_UDP_MOTION_PORT for incoming motion packets.
- * Tracks the remote host address so the status reporter can send
- * status packets back.
+ * See udp_server.h.  Which host the controller listens to is decided by the
+ * motion core; this file only moves datagrams.
  */
 
 #include "udp_server.h"
 #include "protocol_handler.h"
 #include "wifi_manager.h"
+#include "eth_manager.h"
+#include "../motion/motion_control.h"
 #include "../config.h"
 
 #include <string.h>
@@ -19,123 +20,64 @@
 
 static const char *TAG = "udp_srv";
 
-static struct sockaddr_in s_host_addr;
-static bool s_host_known = false;
-static int s_status_sock = -1;
-static TickType_t s_last_packet_tick = 0;
+static int s_sock = -1;
 
-/* Host is considered disconnected after 3 seconds of no UDP packets */
-#define UDP_HOST_TIMEOUT_MS  3000
-
-/* ===================================================================
- * Host Tracking
- * =================================================================== */
-
-bool udp_has_host(void)
+bool network_is_up(void)
 {
-    if (!s_host_known) return false;
-
-    /* Check for timeout */
-    TickType_t now = xTaskGetTickCount();
-    if ((now - s_last_packet_tick) > pdMS_TO_TICKS(UDP_HOST_TIMEOUT_MS)) {
-        s_host_known = false;
-        return false;
-    }
-    return true;
+    return wifi_is_connected() || wifi_is_ap_mode() || eth_is_connected();
 }
 
-bool udp_get_host_addr(struct sockaddr_in *addr)
+bool udp_send_to(uint32_t ip, uint16_t port, const void *data, size_t len)
 {
-    if (!s_host_known) return false;
-    memcpy(addr, &s_host_addr, sizeof(*addr));
-    return true;
+    if (s_sock < 0 || ip == 0) return false;
+    struct sockaddr_in dest = {
+        .sin_family = AF_INET,
+        .sin_port = htons(port),
+        .sin_addr.s_addr = ip,
+    };
+    return sendto(s_sock, data, len, 0, (struct sockaddr *)&dest, sizeof(dest)) == (int)len;
 }
-
-/* ===================================================================
- * Status Send Socket
- * =================================================================== */
-
-bool udp_send_status(const uint8_t *data, size_t len)
-{
-    if (!s_host_known || s_status_sock < 0) return false;
-
-    struct sockaddr_in dest = s_host_addr;
-    dest.sin_port = htons(WCNC_UDP_STATUS_PORT);
-
-    int sent = sendto(s_status_sock, data, len, 0,
-                       (struct sockaddr *)&dest, sizeof(dest));
-    return (sent == (int)len);
-}
-
-/* ===================================================================
- * UDP Receive Task
- * =================================================================== */
 
 void udp_receive_task(void *pvParameters)
 {
     (void)pvParameters;
-    uint8_t rx_buffer[CFG_UDP_RX_BUFFER_SIZE];
+    static uint8_t rx_buffer[CFG_UDP_RX_BUFFER_SIZE];
 
-    ESP_LOGI(TAG, "UDP receive task started on Core %d", xPortGetCoreID());
+    while (!network_is_up()) vTaskDelay(pdMS_TO_TICKS(100));
 
-    /* Wait for WiFi to be ready */
-    while (!wifi_is_connected() && !wifi_is_ap_mode()) {
-        vTaskDelay(pdMS_TO_TICKS(100));
+    int sock = -1;
+    for (;;) {
+        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (sock >= 0) {
+            struct sockaddr_in bind_addr = {
+                .sin_family = AF_INET,
+                .sin_addr.s_addr = htonl(INADDR_ANY),
+                .sin_port = htons(WCNC_UDP_MOTION_PORT),
+            };
+            if (bind(sock, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) == 0) break;
+            ESP_LOGE(TAG, "Cannot bind UDP port %d: errno %d", WCNC_UDP_MOTION_PORT, errno);
+            close(sock);
+        } else {
+            ESP_LOGE(TAG, "Cannot create UDP socket: errno %d", errno);
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));        /* try again rather than leave the controller deaf */
     }
+    s_sock = sock;
+    ESP_LOGI(TAG, "UDP listening on port %d (core %d)", WCNC_UDP_MOTION_PORT, xPortGetCoreID());
 
-    /* Create receive socket */
-    int rx_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (rx_sock < 0) {
-        ESP_LOGE(TAG, "Failed to create UDP receive socket: errno %d", errno);
-        vTaskDelete(NULL);
-        return;
-    }
-
-    struct sockaddr_in bind_addr = {
-        .sin_family = AF_INET,
-        .sin_addr.s_addr = htonl(INADDR_ANY),
-        .sin_port = htons(WCNC_UDP_MOTION_PORT),
-    };
-
-    if (bind(rx_sock, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) < 0) {
-        ESP_LOGE(TAG, "Failed to bind UDP socket to port %d: errno %d",
-                 WCNC_UDP_MOTION_PORT, errno);
-        close(rx_sock);
-        vTaskDelete(NULL);
-        return;
-    }
-
-    /* Create status send socket */
-    s_status_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (s_status_sock < 0) {
-        ESP_LOGE(TAG, "Failed to create UDP status socket: errno %d", errno);
-    }
-
-    ESP_LOGI(TAG, "UDP listening on port %d", WCNC_UDP_MOTION_PORT);
-
-    /* Receive loop */
-    while (1) {
-        struct sockaddr_in source_addr;
-        socklen_t socklen = sizeof(source_addr);
-
-        int len = recvfrom(rx_sock, rx_buffer, sizeof(rx_buffer), 0,
-                            (struct sockaddr *)&source_addr, &socklen);
-
+    for (;;) {
+        struct sockaddr_in source;
+        socklen_t socklen = sizeof(source);
+        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer), 0, (struct sockaddr *)&source, &socklen);
         if (len < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
-            ESP_LOGE(TAG, "recvfrom error: errno %d", errno);
-            vTaskDelay(pdMS_TO_TICKS(100));
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                ESP_LOGE(TAG, "recvfrom error: errno %d", errno);
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
             continue;
         }
-
-        if (len < (int)sizeof(wcnc_header_t)) continue;
-
-        /* Update host address and timestamp */
-        memcpy(&s_host_addr, &source_addr, sizeof(s_host_addr));
-        s_host_known = true;
-        s_last_packet_tick = xTaskGetTickCount();
-
-        /* Dispatch packet */
-        protocol_handle_udp_packet(rx_buffer, (size_t)len);
+        /* Only well-formed packets go any further */
+        if (!protocol_validate_packet(rx_buffer, (size_t)len)) continue;
+        motion_post_udp(rx_buffer, (size_t)len, source.sin_addr.s_addr, ntohs(source.sin_port));
     }
 }

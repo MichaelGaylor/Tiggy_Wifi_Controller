@@ -232,6 +232,10 @@ static void dns_server_task(void *arg)
         int len = recvfrom(sock, buf, sizeof(buf), 0,
                            (struct sockaddr *)&client_addr, &addr_len);
         if (len < 12) continue;  /* Too short or timeout */
+        /* The answer is the query plus 16 bytes: it has to fit.  Only plain
+         * queries are answered (not responses, not other opcodes). */
+        if (len > (int)sizeof(buf) - 16 || (buf[2] & 0xF8) != 0) continue;
+
 
         /*
          * Build a minimal DNS response:

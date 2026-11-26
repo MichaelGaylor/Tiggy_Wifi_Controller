@@ -25,15 +25,18 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 
-static const char *TAG = "eth_mgr";
-
 #define ETH_CONNECTED_BIT  BIT0
 #define ETH_FAIL_BIT       BIT1
 
-static EventGroupHandle_t s_eth_event_group = NULL;
 static esp_netif_t       *s_eth_netif       = NULL;
-static esp_eth_handle_t   s_eth_handle      = NULL;
 static bool               s_connected       = false;
+
+#if HAS_ETHERNET        /* boards without the W5500 option compile none of the driver code */
+
+static const char *TAG = "eth_mgr";
+static EventGroupHandle_t s_eth_event_group = NULL;
+
+static esp_eth_handle_t   s_eth_handle      = NULL;
 
 /* ===================================================================
  * Event Handler
@@ -70,6 +73,8 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
         }
     }
 }
+
+#endif /* HAS_ETHERNET */
 
 /* ===================================================================
  * Initialization

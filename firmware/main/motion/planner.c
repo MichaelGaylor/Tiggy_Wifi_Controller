@@ -1,13 +1,16 @@
 /*
- * WiFi CNC Controller - Motion Segment Planner Ring Buffer
+ * WiFi CNC Controller - Queue of segments in the speed-based form
  *
- * Lock-free single-producer / single-consumer ring buffer using
- * volatile head/tail indices. The network task (Core 0) is the sole
- * producer; the motion control task (Core 1) is the sole consumer.
+ * Segments described by entry speed, exit speed and acceleration: what
+ * G-code mode produces, and what hosts older than protocol 1.2 send.  The
+ * motion task takes them from here and turns each into timed slices for
+ * the step engine (motion_core.c).
  *
- * For the clear operation (E-Stop), a spinlock is used since both
- * cores may be active.
+ * Lock-free single-producer / single-consumer ring buffer using volatile
+ * head/tail indices.  The producer is the G-code task (or the motion task
+ * itself for an old host); the motion task is the only consumer.
  */
+
 
 #include "planner.h"
 #include <string.h>
@@ -21,9 +24,10 @@ _Static_assert((CFG_PLANNER_BUFFER_SIZE & (CFG_PLANNER_BUFFER_SIZE - 1)) == 0,
 
 typedef struct {
     wcnc_motion_segment_t segments[CFG_PLANNER_BUFFER_SIZE];
-    volatile uint16_t head;     /* Write index (producer: network task) */
+    volatile uint16_t head;     /* Write index (producer) */
     volatile uint16_t tail;     /* Read index (consumer: motion task) */
-    portMUX_TYPE mux;           /* Spinlock for clear operation */
+    volatile bool clear_req;    /* planner_clear() was called: the consumer drops everything up to clear_to */
+    volatile uint16_t clear_to;
 } planner_buffer_t;
 
 static DRAM_ATTR planner_buffer_t pb;
@@ -35,7 +39,6 @@ void planner_init(void)
     memset(&pb, 0, sizeof(pb));
     pb.head = 0;
     pb.tail = 0;
-    portMUX_INITIALIZE(&pb.mux);
 }
 
 bool IRAM_ATTR planner_push_segment(const wcnc_motion_segment_t *seg)
@@ -58,6 +61,11 @@ bool IRAM_ATTR planner_push_segment(const wcnc_motion_segment_t *seg)
 
 bool IRAM_ATTR planner_pop_segment(wcnc_motion_segment_t *seg)
 {
+    if (pb.clear_req) {
+        pb.tail = pb.clear_to;
+        pb.clear_req = false;
+    }
+
     /* Check if buffer is empty */
     if (pb.tail == pb.head) {
         return false;
@@ -72,29 +80,38 @@ bool IRAM_ATTR planner_pop_segment(wcnc_motion_segment_t *seg)
     return true;
 }
 
-uint16_t planner_available(void)
-{
-    uint16_t count = (pb.head - pb.tail) & MASK;
-    return (CFG_PLANNER_BUFFER_SIZE - 1) - count;
-}
-
 uint16_t planner_count(void)
 {
-    return (pb.head - pb.tail) & MASK;
+    uint16_t from = pb.clear_req ? pb.clear_to : pb.tail;
+    return (pb.head - from) & MASK;
 }
 
+uint16_t planner_available(void)
+{
+    return (CFG_PLANNER_BUFFER_SIZE - 1) - planner_count();
+}
+
+/* May be called from any task.  Only the consumer moves the read index, so
+ * the request is recorded here and carried out at the next pop; segments
+ * pushed after this call are kept. */
 void planner_clear(void)
 {
-    portENTER_CRITICAL(&pb.mux);
-    pb.head = 0;
-    pb.tail = 0;
-    portEXIT_CRITICAL(&pb.mux);
+    pb.clear_to = pb.head;
+    pb.clear_req = true;
+}
+
+/* Consumer side: drop everything queued, now. */
+void planner_drain(void)
+{
+    pb.clear_req = false;
+    pb.tail = pb.head;
 }
 
 bool IRAM_ATTR planner_is_empty(void)
 {
-    return (pb.tail == pb.head);
+    return planner_count() == 0;
 }
+
 
 bool IRAM_ATTR planner_is_full(void)
 {

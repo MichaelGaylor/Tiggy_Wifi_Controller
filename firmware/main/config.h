@@ -92,7 +92,7 @@
  * =================================================================== */
 
 #define CFG_TASK_MOTION_PRIORITY        20
-#define CFG_TASK_MOTION_STACK           4096
+#define CFG_TASK_MOTION_STACK           6144
 #define CFG_TASK_MOTION_CORE            1
 
 #define CFG_TASK_UDP_RX_PRIORITY        10

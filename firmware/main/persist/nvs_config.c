@@ -32,7 +32,26 @@ void nvs_config_init(void)
         return;
     }
     ESP_LOGI(TAG, "NVS namespace 'wcnc' opened");
+
+    /* Firmware before 1.2 let the G-code settings $110-$125 store axis rates
+     * and accelerations as floating point under keys that everything else
+     * reads as integers.  Put any such value right. */
+    static const char *keys[] = { "rate_x", "rate_y", "rate_z", "rate_a", "rate_b", "rate_c",
+                                  "acc_x", "acc_y", "acc_z", "acc_a", "acc_b", "acc_c" };
+    bool repaired = false;
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+        uint32_t raw;
+        if (nvs_get_u32(s_nvs_handle, keys[i], &raw) != ESP_OK || raw <= 16000000u) continue;
+        float f;
+        memcpy(&f, &raw, sizeof(f));
+        if (f >= 1.0f && f <= 16000000.0f) {
+            nvs_set_u32(s_nvs_handle, keys[i], (uint32_t)(f + 0.5f));
+            repaired = true;
+        }
+    }
+    if (repaired) nvs_commit(s_nvs_handle);
 }
+
 
 /* ===================================================================
  * Generic Access Functions
@@ -48,8 +67,14 @@ void nvs_config_get_string(const char *key, char *value, size_t max_len,
     }
 }
 
+/* The setters leave flash alone when the stored value is already the one
+ * asked for: a host sends its whole configuration every time it connects. */
+
 void nvs_config_set_string(const char *key, const char *value)
 {
+    char current[WCNC_CONFIG_VALUE_LEN + 1];
+    size_t size = sizeof(current);
+    if (nvs_get_str(s_nvs_handle, key, current, &size) == ESP_OK && strcmp(current, value) == 0) return;
     nvs_set_str(s_nvs_handle, key, value);
 }
 
@@ -68,7 +93,7 @@ void nvs_config_set_float(const char *key, float value)
 {
     uint32_t raw;
     memcpy(&raw, &value, sizeof(uint32_t));
-    nvs_set_u32(s_nvs_handle, key, raw);
+    nvs_config_set_u32(key, raw);
 }
 
 uint32_t nvs_config_get_u32(const char *key, uint32_t default_value)
@@ -80,6 +105,8 @@ uint32_t nvs_config_get_u32(const char *key, uint32_t default_value)
 
 void nvs_config_set_u32(const char *key, uint32_t value)
 {
+    uint32_t current;
+    if (nvs_get_u32(s_nvs_handle, key, &current) == ESP_OK && current == value) return;
     nvs_set_u32(s_nvs_handle, key, value);
 }
 
@@ -92,6 +119,8 @@ uint16_t nvs_config_get_u16(const char *key, uint16_t default_value)
 
 void nvs_config_set_u16(const char *key, uint16_t value)
 {
+    uint16_t current;
+    if (nvs_get_u16(s_nvs_handle, key, &current) == ESP_OK && current == value) return;
     nvs_set_u16(s_nvs_handle, key, value);
 }
 
@@ -104,6 +133,8 @@ uint8_t nvs_config_get_u8(const char *key, uint8_t default_value)
 
 void nvs_config_set_u8(const char *key, uint8_t value)
 {
+    uint8_t current;
+    if (nvs_get_u8(s_nvs_handle, key, &current) == ESP_OK && current == value) return;
     nvs_set_u8(s_nvs_handle, key, value);
 }
 
@@ -160,6 +191,8 @@ static const char *protocol_key_to_nvs(uint16_t key)
     case WCNC_CFG_INVERT_HOME:    return "inv_home";
     case WCNC_CFG_INVERT_ESTOP:   return "inv_estop";
     case WCNC_CFG_INVERT_PROBE:   return "inv_probe";
+    case WCNC_CFG_LIMIT_ENABLE_MASK: return "lim_en";
+    case WCNC_CFG_INPUT_DEBOUNCE_MS: return "hm_dbnc";    /* also GRBL $26 */
     case WCNC_CFG_HOMING_DIR_MASK: return "hm_dir";
     case WCNC_CFG_HOMING_SEEK_RATE: return "hm_seek";
     case WCNC_CFG_HOMING_FEED_RATE: return "hm_feed";
@@ -167,6 +200,8 @@ static const char *protocol_key_to_nvs(uint16_t key)
     case WCNC_CFG_CHARGE_PUMP_FREQ: return "cp_freq";
     case WCNC_CFG_SPINDLE_PWM_FREQ: return "sp_freq";
     case WCNC_CFG_SPINDLE_MAX_RPM:  return "sp_rpm";
+    case WCNC_CFG_SPINDLE_PWM_ENABLE: return "sp_pwm";
+    case WCNC_CFG_SPINDLE_MIN_DUTY:  return "sp_mind";
     /* Pin assignments */
     case WCNC_CFG_PIN_STEP_X:      return "p_sx";
     case WCNC_CFG_PIN_STEP_Y:      return "p_sy";
@@ -194,6 +229,9 @@ static const char *protocol_key_to_nvs(uint16_t key)
     case WCNC_CFG_PIN_CHARGE_PUMP: return "p_cp";
     case WCNC_CFG_PIN_MISC_OUT0:   return "p_mo0";
     case WCNC_CFG_PIN_MISC_OUT1:   return "p_mo1";
+    case WCNC_CFG_PIN_MISC_OUT2:   return "p_mo2";
+    case WCNC_CFG_PIN_MISC_OUT3:   return "p_mo3";
+    case WCNC_CFG_PIN_MISC_OUT4:   return "p_mo4";
     /* Spindle encoder */
     case WCNC_CFG_PIN_ENCODER_A:     return "p_enc_a";
     case WCNC_CFG_PIN_ENCODER_B:     return "p_enc_b";
@@ -247,16 +285,18 @@ static uint16_t protocol_key_value_type(uint16_t key)
         key == WCNC_CFG_INVERT_DIR || key == WCNC_CFG_INVERT_ENABLE ||
         key == WCNC_CFG_INVERT_LIMIT || key == WCNC_CFG_INVERT_HOME ||
         key == WCNC_CFG_INVERT_ESTOP || key == WCNC_CFG_INVERT_PROBE ||
-        key == WCNC_CFG_HOMING_DIR_MASK)
+        key == WCNC_CFG_HOMING_DIR_MASK || key == WCNC_CFG_LIMIT_ENABLE_MASK ||
+        key == WCNC_CFG_SPINDLE_PWM_ENABLE || key == WCNC_CFG_SPINDLE_MIN_DUTY)
         return WCNC_VAL_UINT8;
     if (key == WCNC_CFG_STATIC_IP || key == WCNC_CFG_STATIC_GATEWAY ||
         key == WCNC_CFG_STATIC_NETMASK || key == WCNC_CFG_HOMING_SEEK_RATE ||
         key == WCNC_CFG_HOMING_FEED_RATE || key == WCNC_CFG_HOMING_PULLOFF ||
         key == WCNC_CFG_SPINDLE_MAX_RPM)
         return WCNC_VAL_UINT32;
-    if (key == WCNC_CFG_CHARGE_PUMP_FREQ || key == WCNC_CFG_SPINDLE_PWM_FREQ)
+    if (key == WCNC_CFG_CHARGE_PUMP_FREQ || key == WCNC_CFG_SPINDLE_PWM_FREQ ||
+        key == WCNC_CFG_INPUT_DEBOUNCE_MS)
         return WCNC_VAL_UINT16;
-    if (key >= WCNC_CFG_PIN_STEP_X && key <= WCNC_CFG_PIN_MISC_OUT1)
+    if (key >= WCNC_CFG_PIN_STEP_X && key <= WCNC_CFG_PIN_MISC_OUT4)
         return WCNC_VAL_UINT8;
     /* Encoder: pins and mode are uint8, PPR and filter are uint16 */
     if (key == WCNC_CFG_PIN_ENCODER_A || key == WCNC_CFG_PIN_ENCODER_B ||
@@ -294,6 +334,7 @@ static uint32_t protocol_key_default_u32(uint16_t key)
     if (key == WCNC_CFG_HOMING_SEEK_RATE) return CFG_DEFAULT_HOMING_SEEK_RATE;
     if (key == WCNC_CFG_HOMING_FEED_RATE) return CFG_DEFAULT_HOMING_FEED_RATE;
     if (key == WCNC_CFG_HOMING_PULLOFF)   return CFG_DEFAULT_HOMING_PULLOFF;
+    if (key == WCNC_CFG_SPINDLE_MAX_RPM)  return 24000;
     return 0;
 }
 
@@ -305,6 +346,7 @@ static uint16_t protocol_key_default_u16(uint16_t key)
     if (key == WCNC_CFG_STATUS_INTERVAL_MS)  return CFG_DEFAULT_STATUS_INTERVAL_MS;
     if (key == WCNC_CFG_CHARGE_PUMP_FREQ)    return 10000;  /* 10 kHz default */
     if (key == WCNC_CFG_SPINDLE_PWM_FREQ)    return 1000;   /* 1 kHz default */
+    if (key == WCNC_CFG_INPUT_DEBOUNCE_MS)   return CFG_INPUT_DEBOUNCE_MS;
     if (key == WCNC_CFG_ENCODER_PPR)         return 0;      /* 0 = not configured */
     if (key == WCNC_CFG_ENCODER_FILTER_NS)   return 1000;   /* 1us glitch filter */
     return 0;
@@ -320,6 +362,7 @@ static uint8_t protocol_key_default_u8(uint16_t key)
     if (key == WCNC_CFG_INVERT_DIR)     return CFG_DEFAULT_INVERT_DIR;
     if (key == WCNC_CFG_INVERT_ENABLE)  return CFG_DEFAULT_INVERT_ENABLE;
     if (key == WCNC_CFG_HOMING_DIR_MASK) return CFG_DEFAULT_HOMING_DIR_MASK;
+    if (key == WCNC_CFG_LIMIT_ENABLE_MASK) return 0x3F;
     /* Pin assignment defaults from pin_config.h */
     if (key == WCNC_CFG_PIN_STEP_X)      return (uint8_t)PIN_STEP_X;
     if (key == WCNC_CFG_PIN_STEP_Y)      return (uint8_t)PIN_STEP_Y;
@@ -385,7 +428,13 @@ static uint8_t protocol_key_default_u8(uint16_t key)
     /* I/O module pin defaults: 0xFF = not configured */
     if (key >= WCNC_CFG_IO_PIN_BASE && key < WCNC_CFG_IO_PIN_BASE + 16)
         return 0xFF;
+    /* A pin this board does not have: 0xFF = not fitted */
+    if ((key >= WCNC_CFG_PIN_STEP_X && key <= WCNC_CFG_PIN_MISC_OUT4) ||
+        (key >= WCNC_CFG_PIN_MISC_IN0 && key <= WCNC_CFG_PIN_MISC_IN3) ||
+        (key >= WCNC_CFG_PIN_ETH_MOSI && key <= WCNC_CFG_PIN_ETH_INT))
+        return 0xFF;
     return 0;
+
 }
 
 void nvs_config_get_by_protocol_key(uint16_t key, uint8_t *value,
@@ -440,6 +489,12 @@ void nvs_config_set_by_protocol_key(uint16_t key, const uint8_t *value,
         ESP_LOGW(TAG, "Unknown config key for set: 0x%04X", key);
         return;
     }
+    if (value_type != protocol_key_value_type(key)) {
+        /* Storing a value under the wrong type would make it unreadable */
+        ESP_LOGW(TAG, "Config key 0x%04X: value type %d does not match (expected %d) - ignored",
+                 key, value_type, protocol_key_value_type(key));
+        return;
+    }
 
     switch (value_type) {
     case WCNC_VAL_FLOAT: {
@@ -465,13 +520,17 @@ void nvs_config_set_by_protocol_key(uint16_t key, const uint8_t *value,
         break;
     }
     case WCNC_VAL_STRING: {
-        nvs_config_set_string(nvs_key, (const char *)value);
+        char text[WCNC_CONFIG_VALUE_LEN + 1];
+        memcpy(text, value, WCNC_CONFIG_VALUE_LEN);
+        text[WCNC_CONFIG_VALUE_LEN] = '\0';            /* the sender may have filled the whole field */
+        nvs_config_set_string(nvs_key, text);
         break;
     }
     default:
         ESP_LOGW(TAG, "Unknown value type: %d", value_type);
         break;
     }
+
 
     ESP_LOGI(TAG, "Config set: key=0x%04X nvs='%s' type=%d", key, nvs_key, value_type);
 }

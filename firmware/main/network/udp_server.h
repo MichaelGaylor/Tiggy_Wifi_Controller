@@ -1,27 +1,26 @@
 /*
  * WiFi CNC Controller - UDP Server
  *
- * Receives motion packets on the UDP motion port and dispatches them.
- * Also tracks the host address for sending status replies.
+ * Receives datagrams on WCNC_UDP_MOTION_PORT and passes them to the motion
+ * task.  Replies (status reports, discovery answers) leave from the same
+ * socket, so a host that asks for them on its source port needs no fixed
+ * listening port and no firewall rule.
  */
 
 #ifndef UDP_SERVER_H
 #define UDP_SERVER_H
 
-#include <stdint.h>
 #include <stdbool.h>
-#include "lwip/sockets.h"
+#include <stddef.h>
+#include <stdint.h>
 
-/* FreeRTOS task: receives UDP motion packets */
+/* FreeRTOS task: receive loop */
 void udp_receive_task(void *pvParameters);
 
-/* Check if a host is registered (has sent at least one packet) */
-bool udp_has_host(void);
+/* Send a datagram.  ip is in network byte order.  May be called from any task. */
+bool udp_send_to(uint32_t ip, uint16_t port, const void *data, size_t len);
 
-/* Get the host address for sending status packets back */
-bool udp_get_host_addr(struct sockaddr_in *addr);
-
-/* Send a UDP packet to the registered host on the status port */
-bool udp_send_status(const uint8_t *data, size_t len);
+/* True once the network interface (WiFi station, access point or Ethernet) is up. */
+bool network_is_up(void);
 
 #endif /* UDP_SERVER_H */

@@ -22,6 +22,7 @@
 #include "pin_config.h"
 #include "motion/planner.h"
 #include "motion/stepper.h"
+#include "motion/step_engine.h"
 #include "motion/motion_control.h"
 #include "network/wifi_manager.h"
 #include "network/eth_manager.h"
@@ -88,20 +89,21 @@ void app_main(void)
     uint8_t device_mode = nvs_config_get_u8("dev_mode", 0);
     ESP_LOGI(TAG, "Device mode: %s", device_mode == 0 ? "motion controller" : "I/O module");
 
+    boot_stage("planner_init");
+    planner_init();
     if (device_mode == 0) {
         /* Motion controller mode (default) */
-        boot_stage("planner_init");
-        planner_init();
-        ESP_LOGI(TAG, "Planner buffer initialized (%d slots)", CFG_PLANNER_BUFFER_SIZE);
         boot_stage("stepper_init");
         stepper_init();
         ESP_LOGI(TAG, "Stepper engine initialized");
     } else {
-        /* I/O module mode: skip stepper/planner, init expanded I/O */
+        /* I/O module mode: no motors, the pins are general purpose I/O */
         boot_stage("io_module_init");
+        se_init();
         io_module_init();
         ESP_LOGI(TAG, "I/O module initialized");
     }
+    motion_control_init();
 
     /* 5. Initialize spindle encoder (works in both modes) */
     boot_stage("spindle_encoder_init");
@@ -146,15 +148,16 @@ void app_main(void)
         CFG_TASK_STATUS_PRIORITY, NULL,
         CFG_TASK_STATUS_CORE);
 
-    /* 8. Create motion control task on Core 1 (motion controller mode only) */
-    if (device_mode == 0) {
-        boot_stage("motion_task");
-        xTaskCreatePinnedToCore(
-            motion_control_task, "motion",
-            CFG_TASK_MOTION_STACK, NULL,
-            CFG_TASK_MOTION_PRIORITY, NULL,
-            CFG_TASK_MOTION_CORE);
-    }
+    /* 8. Create the motion task on Core 1.  It also runs in I/O module mode:
+     *    it is the one place that deals with the host (outputs, watchdog,
+     *    status reports). */
+    boot_stage("motion_task");
+    xTaskCreatePinnedToCore(
+        motion_control_task, "motion",
+        CFG_TASK_MOTION_STACK, NULL,
+        CFG_TASK_MOTION_PRIORITY, NULL,
+        CFG_TASK_MOTION_CORE);
+
 
     /* 9. Initialize G-code interface (queue, parser, planner) */
     boot_stage("gcode_interface_init");

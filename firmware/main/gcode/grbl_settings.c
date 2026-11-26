@@ -10,6 +10,7 @@
 #include "persist/nvs_config.h"
 #include "config.h"
 #include "motion/stepper.h"
+#include "motion/motion_control.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -98,23 +99,24 @@ static const setting_map_t settings[] = {
     { 104, "spm_b",  STYPE_FLOAT, CONV_NONE, 4, CFG_DEFAULT_STEPS_PER_MM },
     { 105, "spm_c",  STYPE_FLOAT, CONV_NONE, 5, CFG_DEFAULT_STEPS_PER_MM },
 
-    /* Per-axis max rate in mm/min ($110-$115) — stored as float steps/sec
+    /* Per-axis max rate in mm/min ($110-$115) — stored as whole steps/sec, the
+     * form the motion code and the binary protocol use.
      * Default: 6666.67 steps/sec = 500 mm/min at 800 steps/mm */
-    { 110, "rate_x", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 0, 6666.67f },
-    { 111, "rate_y", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 1, 6666.67f },
-    { 112, "rate_z", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 2, 6666.67f },
-    { 113, "rate_a", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 3, 6666.67f },
-    { 114, "rate_b", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 4, 6666.67f },
-    { 115, "rate_c", STYPE_FLOAT, CONV_RATE_MM_TO_SPS, 5, 6666.67f },
+    { 110, "rate_x", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 0, 6667.0f },
+    { 111, "rate_y", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 1, 6667.0f },
+    { 112, "rate_z", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 2, 6667.0f },
+    { 113, "rate_a", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 3, 6667.0f },
+    { 114, "rate_b", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 4, 6667.0f },
+    { 115, "rate_c", STYPE_UINT32, CONV_RATE_MM_TO_SPS, 5, 6667.0f },
 
-    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as float steps/sec^2
+    /* Per-axis acceleration in mm/sec^2 ($120-$125) — stored as whole steps/sec^2
      * Default: 40000.0 steps/sec^2 = 50 mm/sec^2 at 800 steps/mm */
-    { 120, "acc_x",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 0, 40000.0f },
-    { 121, "acc_y",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 1, 40000.0f },
-    { 122, "acc_z",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 2, 40000.0f },
-    { 123, "acc_a",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 3, 40000.0f },
-    { 124, "acc_b",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 4, 40000.0f },
-    { 125, "acc_c",  STYPE_FLOAT, CONV_ACCEL_MM_TO_SPS2, 5, 40000.0f },
+    { 120, "acc_x",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 0, 40000.0f },
+    { 121, "acc_y",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 1, 40000.0f },
+    { 122, "acc_z",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 2, 40000.0f },
+    { 123, "acc_a",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 3, 40000.0f },
+    { 124, "acc_b",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 4, 40000.0f },
+    { 125, "acc_c",  STYPE_UINT32, CONV_ACCEL_MM_TO_SPS2, 5, 40000.0f },
 
     /* Max travel ($130-$132) — for soft limits */
     { 130, "trvl_x", STYPE_FLOAT, CONV_NONE, 0, 200.0f },
@@ -250,13 +252,10 @@ gcode_error_t grbl_setting_set(int number, float value)
 
     nvs_config_commit();
 
-    /* Apply immediately for timing/axis settings */
-    if (number == 0 || number == 1) {
-        stepper_apply_timing_config();
-    }
-    if (number >= 100 && number <= 125) {
-        stepper_apply_axis_config();
-    }
+    /* Every setting takes effect at once: the motion task reads its
+     * configuration again (timing, polarity, debounce, rates, homing,
+     * spindle) on its next pass. */
+    motion_config_changed();
 
     return GCODE_OK;
 }

@@ -11,6 +11,27 @@
  *
  * All structures are packed to ensure identical layout across compilers.
  * All multi-byte fields are little-endian (native for both ESP32 and x86).
+ *
+ * Revision history
+ *   1.0  Initial protocol.
+ *   1.1  Status report extended (I/O state, spindle encoder, I/O module).
+ *   1.2  Reliable motion over UDP.  Everything added in 1.2 is optional and
+ *        wire-compatible: a device advertises WCNC_CAP_STREAM_V2, and a host
+ *        opts in per packet.  Hosts written for 1.0/1.1 keep working.
+ *          - Timed segments (WCNC_SEG_FLAG_TIMED): steps are played back
+ *            evenly over exactly duration_us.  This is what a host that has
+ *            already planned its trajectory (Mach3, LinuxCNC) needs.
+ *          - Sequenced streams (WCNC_MOTION_FLAG_SEQUENCED): segments carry
+ *            consecutive segment_id values, the device accepts them strictly
+ *            in order and reports the next id it expects, so a lost or
+ *            duplicated datagram can never lose or repeat motion.
+ *          - Stream flush with a stream id, so stale packets from an
+ *            aborted run are ignored.
+ *          - Host watchdog: a host that sets WCNC_IO_FLAG_WATCHDOG must keep
+ *            sending IO_CONTROL packets; if they stop, the device stops
+ *            motion and switches its outputs off.
+ *          - Jog deadman, ramped jog, self-contained home command,
+ *            discovery request/response.
  */
 
 #ifndef WIFI_CNC_PROTOCOL_H
@@ -48,7 +69,7 @@ extern "C" {
 #define WCNC_MAKE_VERSION(maj, min, pat) \
     (((uint32_t)(maj) << 24) | ((uint32_t)(min) << 16) | ((uint32_t)(pat)))
 
-#define WCNC_FIRMWARE_VERSION   WCNC_MAKE_VERSION(1, 1, 0)
+#define WCNC_FIRMWARE_VERSION   WCNC_MAKE_VERSION(1, 2, 0)
 
 /* ===================================================================
  * Packet Types
@@ -65,6 +86,8 @@ typedef enum {
     WCNC_PKT_RESET             = 0x07,
     WCNC_PKT_HOME_COMMAND      = 0x08,
     WCNC_PKT_IO_CONTROL        = 0x09,   /* Real-time output control (UDP) */
+    WCNC_PKT_STREAM_FLUSH      = 0x0A,   /* v1.2: stop, discard queued motion, start a new stream */
+    WCNC_PKT_DISCOVER          = 0x0B,   /* v1.2: who is there? (may be broadcast) */
 
     /* ESP32 -> PC (UDP status channel) */
     WCNC_PKT_STATUS_REPORT     = 0x20,
@@ -72,6 +95,7 @@ typedef enum {
     WCNC_PKT_HOME_COMPLETE     = 0x22,
     WCNC_PKT_PROBE_RESULT      = 0x23,
     WCNC_PKT_ACK               = 0x24,
+    WCNC_PKT_DISCOVER_RESP     = 0x25,   /* v1.2: reply to WCNC_PKT_DISCOVER */
 
     /* Bidirectional (TCP control channel) */
     WCNC_PKT_HANDSHAKE_REQ     = 0x40,
@@ -117,6 +141,8 @@ typedef enum {
     WCNC_ALARM_BUFFER_UNDERRUN  = 11,
     WCNC_ALARM_ESTOP_ACTIVE     = 20,
     WCNC_ALARM_WATCHDOG         = 30,
+    WCNC_ALARM_HOST_LOST        = 31,   /* v1.2: host watchdog expired while active */
+    WCNC_ALARM_HOME_FAIL        = 40,   /* v1.2: homing switch not found or did not release */
 } wcnc_alarm_code_t;
 
 /* ===================================================================
@@ -127,6 +153,62 @@ typedef enum {
 #define WCNC_SEG_FLAG_LAST          0x02   /* Last segment of a G-code block */
 #define WCNC_SEG_FLAG_PROBE         0x04   /* Probe move: stop on contact */
 #define WCNC_SEG_FLAG_EXACT_STOP    0x08   /* Decelerate to zero at end */
+#define WCNC_SEG_FLAG_TIMED         0x10   /* v1.2: constant rate. Emit steps[] evenly over
+                                              exactly duration_us; entry/exit_speed_sqr and
+                                              acceleration are ignored. A timed segment with
+                                              no steps is a dwell of duration_us. */
+#define WCNC_SEG_FLAG_SUBSTEP       0x20   /* v1.2, with TIMED: steps[] are in units of
+                                              1/WCNC_SUBSTEP_SCALE of a step. The device keeps
+                                              the fraction of a step left over on each axis and
+                                              carries it into the next segment, so a host can
+                                              describe any velocity exactly and the pulses stay
+                                              evenly spaced across segment boundaries. An axis
+                                              steps each time its accumulated position passes a
+                                              whole step; the accumulator starts half-way
+                                              (WCNC_SUBSTEP_SCALE / 2) on a new stream. */
+#define WCNC_SUBSTEP_SCALE          256
+
+/* ===================================================================
+ * Motion Packet Flags (wcnc_motion_packet_t.flags, v1.2)
+ * =================================================================== */
+
+#define WCNC_MOTION_FLAG_SEQUENCED  0x01   /* Segments carry consecutive segment_id values.
+                                              The device accepts a segment only when its id
+                                              equals the id it expects next (reported in the
+                                              status report) and its packet's stream_id is
+                                              the active stream. Anything else is ignored,
+                                              and the host re-sends from the expected id. */
+
+/* Stream flush modes (wcnc_stream_flush_packet_t.mode) */
+#define WCNC_FLUSH_DECELERATE       0      /* Ramp to a stop, then discard the queue */
+#define WCNC_FLUSH_IMMEDIATE        1      /* Stop at once, then discard the queue */
+
+/* IO control flags (wcnc_io_control_packet_t.flags, v1.2) */
+#define WCNC_IO_FLAG_WATCHDOG        0x01  /* Host promises to keep sending IO_CONTROL (at
+                                              least every WCNC_HOST_WATCHDOG_MS / 4). If
+                                              packets from this host stop for
+                                              WCNC_HOST_WATCHDOG_MS the device stops motion
+                                              and clears its outputs. */
+#define WCNC_IO_FLAG_REPLY_TO_SOURCE 0x02  /* Send status reports to the UDP source port of
+                                              this packet instead of WCNC_UDP_STATUS_PORT
+                                              (lets a host behind NAT receive status). */
+#define WCNC_IO_FLAG_CHARGE_PUMP     0x04  /* With WATCHDOG: run the charge pump output while
+                                              set. (Without WATCHDOG the charge pump follows
+                                              WCNC_CFG_CHARGE_PUMP_FREQ as in protocol 1.1.) */
+#define WCNC_IO_FLAG_LIMIT_OVERRIDE  0x08  /* Do not raise a limit alarm while set, so the
+                                              operator can jog an axis off its switch. */
+
+#define WCNC_HOST_WATCHDOG_MS       1000
+
+/* Jog flags (wcnc_jog_packet_t.flags, v1.2) */
+#define WCNC_JOG_FLAG_DEADMAN       0x01   /* Host repeats this packet while the jog should
+                                              continue; the axis ramps to a stop if it is not
+                                              refreshed within WCNC_JOG_DEADMAN_MS. */
+#define WCNC_JOG_DEADMAN_MS         500
+
+/* Home command flags (wcnc_home_ex_packet_t.flags, v1.2) */
+#define WCNC_HOME_FLAG_PARAMS       0x01   /* dir_mask and the rate/pulloff fields are valid
+                                              and override the stored homing configuration */
 
 /* ===================================================================
  * Status Flags
@@ -136,6 +218,12 @@ typedef enum {
 #define WCNC_STATUS_HOST_CONNECTED  0x02
 #define WCNC_STATUS_MOTION_ACTIVE   0x04
 #define WCNC_STATUS_HOMING_ACTIVE   0x08
+
+/* Stream flags (wcnc_status_report_t.stream_flags, v1.2) */
+#define WCNC_STREAM_PROBE_TRIPPED   0x01   /* A probe segment of the active stream hit the
+                                              probe; position_steps is the contact position */
+#define WCNC_STREAM_UNDERRUN        0x02   /* Queue ran dry while a sequenced stream was moving */
+#define WCNC_STREAM_FLUSHING        0x04   /* Decelerating before a flush completes */
 
 /* ===================================================================
  * Capability Flags (reported in handshake)
@@ -147,6 +235,8 @@ typedef enum {
 #define WCNC_CAP_SPINDLE_PWM       0x08
 #define WCNC_CAP_SPINDLE_ENCODER   0x10   /* Has spindle encoder (PCNT-based) */
 #define WCNC_CAP_IO_MODULE         0x20   /* Running in I/O expansion module mode */
+#define WCNC_CAP_STREAM_V2         0x40   /* v1.2: timed segments, sequenced streams, stream
+                                             flush, host watchdog, ramped jog, discovery */
 
 /* ===================================================================
  * Configuration Keys
@@ -199,6 +289,14 @@ typedef enum {
     WCNC_CFG_INVERT_HOME        = 0x0311,  /* uint8: home switch inversion bitmask */
     WCNC_CFG_INVERT_ESTOP       = 0x0312,  /* uint8: 0=active low, 1=active high */
     WCNC_CFG_INVERT_PROBE       = 0x0313,  /* uint8: 0=active low, 1=active high */
+    WCNC_CFG_LIMIT_ENABLE_MASK  = 0x0314,  /* uint8 (v1.2): limit inputs that raise an alarm when
+                                              active during motion (bit per input, default 0x3F).
+                                              Clear a bit for an input used only for homing. */
+    WCNC_CFG_INPUT_DEBOUNCE_MS  = 0x0315,  /* uint16 (v1.2): time in ms a switch, probe, E-stop or
+                                              auxiliary input must hold a new level before it is
+                                              reported (1..100, default 5).  The probe latch and
+                                              the homing switch stop act on the first edge. */
+
 
     /* Homing */
     WCNC_CFG_HOMING_DIR_MASK    = 0x0320,  /* uint8: 1=positive direction */
@@ -210,6 +308,8 @@ typedef enum {
     WCNC_CFG_CHARGE_PUMP_FREQ   = 0x0400,  /* uint16: Hz, 0=disabled */
     WCNC_CFG_SPINDLE_PWM_FREQ   = 0x0430,  /* uint16: Hz */
     WCNC_CFG_SPINDLE_MAX_RPM    = 0x0431,  /* uint32: max RPM at 100% duty */
+    WCNC_CFG_SPINDLE_PWM_ENABLE = 0x0432,  /* uint8 (v1.2): 0=spindle pin is on/off, 1=PWM speed */
+    WCNC_CFG_SPINDLE_MIN_DUTY   = 0x0433,  /* uint8 (v1.2): minimum PWM duty in percent when running */
 
     /* Pin assignments (uint8 = GPIO number, requires reboot to take effect) */
     WCNC_CFG_PIN_STEP_X         = 0x0500,
@@ -238,6 +338,9 @@ typedef enum {
     WCNC_CFG_PIN_CHARGE_PUMP    = 0x0517,
     WCNC_CFG_PIN_MISC_OUT0      = 0x0518,
     WCNC_CFG_PIN_MISC_OUT1      = 0x0519,
+    WCNC_CFG_PIN_MISC_OUT2      = 0x051A,  /* v1.2: 0xFF = output not fitted */
+    WCNC_CFG_PIN_MISC_OUT3      = 0x051B,
+    WCNC_CFG_PIN_MISC_OUT4      = 0x051C,
 
     /* Spindle encoder */
     WCNC_CFG_PIN_ENCODER_A      = 0x0520,  /* uint8: GPIO for quadrature channel A */
@@ -309,7 +412,9 @@ typedef struct WCNC_PACKED {
 
 typedef struct WCNC_PACKED {
     int32_t  steps[WCNC_MAX_AXES];  /* Step count per axis (signed = direction) */
-    uint32_t duration_us;            /* Segment duration in microseconds */
+    uint32_t duration_us;            /* Timed segment: its exact duration in microseconds.
+                                        Otherwise, if not 0: the time the move would take
+                                        at its cruise speed (it is not played faster). */
     uint32_t entry_speed_sqr;        /* Entry speed^2 * 1000 (steps/sec)^2 */
     uint32_t exit_speed_sqr;         /* Exit speed^2 * 1000 */
     uint32_t acceleration;           /* steps/sec^2 * 100 */
@@ -322,7 +427,9 @@ typedef struct WCNC_PACKED {
 typedef struct WCNC_PACKED {
     wcnc_header_t header;
     uint8_t  segment_count;          /* 1..WCNC_MAX_SEGMENTS_PER_PACKET */
-    uint8_t  reserved[3];
+    uint8_t  flags;                  /* WCNC_MOTION_FLAG_* (v1.2; 0 from older hosts) */
+    uint8_t  stream_id;              /* Stream these segments belong to (v1.2, sequenced only) */
+    uint8_t  reserved;
     wcnc_motion_segment_t segments[WCNC_MAX_SEGMENTS_PER_PACKET];
 } wcnc_motion_packet_t;
 
@@ -345,7 +452,8 @@ typedef struct WCNC_PACKED {
     int32_t  feed_rate;              /* Current feed rate in steps/sec */
     /* --- Extended fields (v1.1, 4 bytes) --- */
     uint8_t  misc_outputs;           /* Bitmask of current misc output states */
-    uint8_t  misc_inputs;            /* Bitmask of current misc input states */
+    uint8_t  misc_inputs;            /* Bitmask of misc inputs: bit set = input pulled low
+                                        (a switch to ground is closed) */
     uint8_t  spindle_state;          /* 0=off, 1=CW, 2=CCW */
     uint8_t  coolant_state;          /* bit 0=flood, bit 1=mist */
     /* --- Spindle encoder (v1.1, 8 bytes) --- */
@@ -353,9 +461,21 @@ typedef struct WCNC_PACKED {
     uint16_t spindle_position;       /* Angular position: 0-65535 = 0-360 degrees */
     uint32_t spindle_index_count;    /* Cumulative index pulse count since boot */
     /* --- I/O module (v1.1, 4 bytes) --- */
-    uint16_t io_inputs;              /* Digital input states (up to 16 channels) */
+    uint16_t io_inputs;              /* I/O module: level of each input channel, bit set =
+                                        pin high (after the module's own invert mask) */
     uint16_t io_outputs;             /* Digital output states (up to 16 channels) */
+    /* --- Reliable motion stream (v1.2, 8 bytes) --- */
+    uint16_t next_segment_id;        /* segment_id the device will accept next */
+    uint8_t  stream_id;              /* Active motion stream */
+    uint8_t  stream_flags;           /* WCNC_STREAM_* */
+    uint8_t  homed_mask;             /* Axes whose last homing cycle succeeded */
+    uint8_t  jog_mask;               /* Axes currently jogging (including ramp-down) */
+    uint16_t queued_ms;              /* Motion time still queued, in ms (saturates at 65535) */
 } wcnc_status_report_t;
+
+/* Size of the status report as sent by protocol 1.1 devices. Hosts must accept
+ * any report at least this long and treat missing trailing fields as zero. */
+#define WCNC_STATUS_REPORT_V11_SIZE  62
 
 typedef struct WCNC_PACKED {
     wcnc_header_t header;
@@ -368,7 +488,8 @@ typedef struct WCNC_PACKED {
     wcnc_header_t header;
     uint8_t  axis;                   /* 0=X .. 5=C */
     int8_t   direction;              /* -1 or +1 */
-    uint8_t  reserved[2];
+    uint8_t  flags;                  /* WCNC_JOG_FLAG_* (v1.2) */
+    uint8_t  reserved;
     uint32_t speed;                  /* Steps per second */
 } wcnc_jog_packet_t;
 
@@ -388,6 +509,28 @@ typedef struct WCNC_PACKED {
     uint8_t  reserved[3];
 } wcnc_home_packet_t;
 
+/* Self-contained home command (v1.2). The first payload bytes line up with
+ * wcnc_home_packet_t, so a 1.1 device simply homes axis_mask with its stored
+ * configuration. All axes in axis_mask are homed together (use it for a
+ * master axis and its slave); home unrelated axes with separate commands. */
+typedef struct WCNC_PACKED {
+    wcnc_header_t header;
+    uint8_t  axis_mask;              /* Bitmask of axes to home together */
+    uint8_t  dir_mask;               /* Bit set = search in the positive direction */
+    uint8_t  flags;                  /* WCNC_HOME_FLAG_* */
+    uint8_t  reserved;
+    uint32_t seek_rate[WCNC_MAX_AXES];   /* Fast search rate, steps/sec */
+    uint32_t latch_rate[WCNC_MAX_AXES];  /* Slow re-approach rate, steps/sec */
+    uint32_t pulloff[WCNC_MAX_AXES];     /* Back-off distance from the switch, steps */
+    uint8_t  switch_input[WCNC_MAX_AXES];/* Limit/home input (0..5) that homes each axis.
+                                            WCNC_HOME_NO_SWITCH: the axis has no switch of its
+                                            own and copies the lowest-numbered axis in
+                                            axis_mask that has one. */
+    uint8_t  reserved2[2];
+} wcnc_home_ex_packet_t;
+
+#define WCNC_HOME_NO_SWITCH  0xFF
+
 /* --- IO Control (PC -> ESP32, UDP) --- */
 
 typedef struct WCNC_PACKED {
@@ -396,8 +539,41 @@ typedef struct WCNC_PACKED {
     uint8_t  spindle_state;          /* 0=off, 1=CW, 2=CCW */
     uint16_t spindle_rpm;            /* Target RPM (0..max_rpm) */
     uint8_t  coolant_state;          /* bit 0=flood, bit 1=mist */
-    uint8_t  reserved[3];
+    uint8_t  flags;                  /* WCNC_IO_FLAG_* (v1.2) */
+    uint16_t io_outputs;             /* I/O module mode: output states, bit per channel (v1.2).
+                                        Zero from older hosts, which drive channels 0-7
+                                        through misc_outputs. */
 } wcnc_io_control_packet_t;
+
+/* --- Stream Flush (PC -> ESP32, UDP, v1.2) ---
+ * Stops any motion from the current stream, discards everything queued and
+ * makes stream_id the active stream with next_segment_id = 0. A flush whose
+ * stream_id is already active is ignored, so the host may repeat it until
+ * the status report shows the new stream_id. */
+
+typedef struct WCNC_PACKED {
+    wcnc_header_t header;
+    uint8_t  stream_id;              /* New stream id (must differ from the active one) */
+    uint8_t  mode;                   /* WCNC_FLUSH_* */
+    uint8_t  reserved[2];
+} wcnc_stream_flush_packet_t;
+
+/* --- Discovery (UDP, v1.2) ---
+ * WCNC_PKT_DISCOVER is a header-only packet sent to WCNC_UDP_MOTION_PORT,
+ * usually as a broadcast. The device answers the sender's address and source
+ * port and does not change which host it is working for. */
+
+typedef struct WCNC_PACKED {
+    wcnc_header_t header;
+    uint32_t firmware_version;
+    uint8_t  capabilities;           /* WCNC_CAP_* */
+    uint8_t  device_mode;            /* 0=motion controller, 1=I/O module */
+    uint8_t  host_connected;         /* 1 if a host currently owns the device */
+    uint8_t  num_axes;
+    uint8_t  mac[6];                 /* Station MAC address */
+    uint8_t  reserved[2];
+    char     device_name[WCNC_DEVICE_NAME_LEN];
+} wcnc_discover_resp_t;
 
 /* --- Home Complete --- */
 
