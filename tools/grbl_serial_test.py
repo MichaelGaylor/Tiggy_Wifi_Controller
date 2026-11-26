@@ -2,7 +2,8 @@
 """
 The controller's G-code (GRBL-compatible) interface on its USB serial port, on a real board.
 
-    python tools/grbl_serial_test.py COM14
+    python tools/grbl_serial_test.py COM14              (the USB serial port)
+    python tools/grbl_serial_test.py 192.168.1.43       (the same interface over the network, port 23)
 
 This is the interface Universal G-code Sender, CNCjs and TiggyUGS's "Serial GRBL" mode use.  The
 test moves the axes: run it on a board with no motors connected, or with the machine free to move
@@ -12,18 +13,43 @@ import re
 import sys
 import time
 
-import serial
-
 STATUS = re.compile(r"<(\w+)(?::\d+)?\|MPos:([-\d.,]+)")
+
+
+class Telnet:
+    """The G-code interface over the network, with the few calls of a serial port this test uses."""
+
+    def __init__(self, host):
+        import socket
+        self.sock = socket.create_connection((host, 23), timeout=5.0)
+        self.sock.settimeout(0.05)
+        self.timeout = socket.timeout
+
+    def write(self, data):
+        self.sock.sendall(data)
+
+    def read(self, n):
+        try:
+            return self.sock.recv(n)
+        except self.timeout:
+            return b""
+
+    def reset_input_buffer(self):
+        while self.read(4096):
+            pass
 
 
 class Grbl:
     def __init__(self, port):
-        self.s = serial.Serial()
-        self.s.port, self.s.baudrate, self.s.timeout = port, 115200, 0.05
-        self.s.dtr = False                              # leave the board's reset line alone
-        self.s.rts = False
-        self.s.open()
+        if port.upper().startswith("COM") or port.startswith("/dev/"):
+            import serial
+            self.s = serial.Serial()
+            self.s.port, self.s.baudrate, self.s.timeout = port, 115200, 0.05
+            self.s.dtr = False                          # leave the board's reset line alone
+            self.s.rts = False
+            self.s.open()
+        else:
+            self.s = Telnet(port)
         time.sleep(0.3)
         self.s.reset_input_buffer()
         self.buf = b""
@@ -32,11 +58,19 @@ class Grbl:
         """Whatever arrives within the time, as lines."""
         end = time.time() + seconds
         out = []
-        while time.time() < end:
-            self.buf += self.s.read(256)
+        while True:
+            waiting = getattr(self.s, "in_waiting", None)
+            if waiting is None:
+                self.buf += self.s.read(256)            # network: returns with whatever has come
+            elif waiting:
+                self.buf += self.s.read(waiting)        # serial: what is there, without waiting for more
+            else:
+                time.sleep(0.001)
             while b"\n" in self.buf:
                 line, self.buf = self.buf.split(b"\n", 1)
                 out.append(line.decode("ascii", "replace").strip())
+            if time.time() >= end:
+                break
         return [line for line in out if line]
 
     def cmd(self, text, timeout=3.0):
@@ -52,12 +86,15 @@ class Grbl:
         raise AssertionError("no answer to %r (got %s)" % (text, out))
 
     def status(self):
+        self.lines(0.005)                               # nothing left over from an earlier question
         for attempt in range(3):
             self.s.write(b"?")
-            for line in self.lines(0.25):
-                m = STATUS.search(line)
-                if m:
-                    return m.group(1), [float(v) for v in m.group(2).split(",")], line
+            end = time.time() + 0.4
+            while time.time() < end:                    # the answer usually comes within milliseconds
+                for line in self.lines(0.01):
+                    m = STATUS.search(line)
+                    if m:
+                        return m.group(1), [float(v) for v in m.group(2).split(",")], line
         raise AssertionError("no status report")
 
     def wait(self, state, timeout, what):
@@ -190,7 +227,8 @@ def main():
         # moves whose lengths are not whole steps: the rounding of each must not add up
         assert g.cmd("G90 G0 X0 Y0 Z0")[-1] == "ok"
         g.wait("Idle", 20.0, "the way to zero")
-        assert all(abs(v) < 0.0005 for v in g.status()[1][:3]), "not at zero: %s" % g.status()[2]
+        time.sleep(0.3)
+        zero = g.status()[1]                            # machine position of the work zero
         x = y = 0.0
         for i in range(300):
             x += 0.0437 if i % 3 else -0.0291
@@ -200,13 +238,33 @@ def main():
         st = g.wait("Idle", 30.0, "the moves to be played")
         time.sleep(0.3)
         st = g.status()
-        assert abs(st[1][0] - want[0]) < 0.0005 and abs(st[1][1] - want[1]) < 0.0005, (
-            "after 300 moves the machine is at X%.3f Y%.3f; the program ends at X%.4f Y%.4f" % (st[1][0], st[1][1], x, y))
+        got = (st[1][0] - zero[0], st[1][1] - zero[1])
+        assert abs(got[0] - want[0]) < 0.0005 and abs(got[1] - want[1]) < 0.0005, (
+            "after 300 moves the machine is at X%.3f Y%.3f; the program ends at X%.4f Y%.4f" % (got[0], got[1], x, y))
         assert g.cmd("G0 X0 Y0")[-1] == "ok"
         g.wait("Idle", 20.0, "the way back")
         time.sleep(0.3)
         st = g.status()
-        assert abs(st[1][0]) < 0.0005 and abs(st[1][1]) < 0.0005, "back at zero the machine shows %s" % st[1][:2]
+        assert abs(st[1][0] - zero[0]) < 0.0005 and abs(st[1][1] - zero[1]) < 0.0005, (
+            "back at zero the machine is %.3f, %.3f away from it" % (st[1][0] - zero[0], st[1][1] - zero[1]))
+
+    def t_prompt():
+        # feed hold and jog cancel are single bytes: they must not wait in a buffer
+        took = []
+        for n in range(20):
+            time.sleep(0.03)
+            g.lines(0.005)
+            t0 = time.time()
+            g.s.write(b"?")
+            while not any(STATUS.search(line) for line in g.lines(0.002)):
+                assert time.time() - t0 < 1.0, "no answer to a status query"
+            took.append(time.time() - t0)
+        took.sort()
+        if isinstance(g.s, Telnet):
+            # over a radio link the odd answer is late whatever the controller does: most must be prompt
+            assert took[len(took) // 2] < 0.03, "half the status queries took more than %.0f ms" % (took[len(took) // 2] * 1000)
+        else:
+            assert took[-1] < 0.05, "a status query took up to %.0f ms to be answered" % (took[-1] * 1000)
 
     def t_reset_in_motion():
         assert g.cmd("G90 G1 X-40 F600")[-1] == "ok"
@@ -232,6 +290,7 @@ def main():
     test("120 short lines, nothing lost", t_many_lines)
     test("300 odd-length moves: no drift", t_no_drift)
     test("soft reset while moving", t_reset_in_motion)
+    test("a real-time command is answered at once", t_prompt)
     print("\n%d failed" % failed if failed else "\nall passed")
     return 1 if failed else 0
 

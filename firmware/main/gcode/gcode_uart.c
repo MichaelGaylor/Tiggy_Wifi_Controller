@@ -63,8 +63,15 @@ void gcode_uart_task(void *pvParameters)
     s_active = true;
 
     while (1) {
-        int n = uart_read_bytes(UART_PORT, rx_buf, sizeof(rx_buf),
-                                pdMS_TO_TICKS(100));
+        /* Take what has arrived, at once.  uart_read_bytes waits for all
+         * it is asked for, and a real-time command - feed hold, jog
+         * cancel - is a single byte: asked for a bufferful, it sat for
+         * the whole timeout before it was acted on. */
+        size_t waiting = 0;
+        uart_get_buffered_data_len(UART_PORT, &waiting);
+        if (waiting > sizeof(rx_buf)) waiting = sizeof(rx_buf);
+        int n = waiting ? uart_read_bytes(UART_PORT, rx_buf, (uint32_t)waiting, 0)
+                        : uart_read_bytes(UART_PORT, rx_buf, 1, pdMS_TO_TICKS(100));
         if (n <= 0) continue;
 
         for (int i = 0; i < n; i++) {

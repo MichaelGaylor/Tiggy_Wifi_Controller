@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <errno.h>
 #include <unistd.h>
 
@@ -167,6 +168,12 @@ void gcode_telnet_task(void *pvParameters)
             ESP_LOGE(TAG, "Accept failed: %d", errno);
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
+        }
+        {
+            /* Answers are short and each matters: send them as they are
+             * written, not held back to be put together with the next. */
+            int one = 1;
+            setsockopt(client_sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
         }
 
         ESP_LOGI(TAG, "Client connected");

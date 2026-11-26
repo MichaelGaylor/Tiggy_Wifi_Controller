@@ -158,7 +158,9 @@ A bare dev board is enough; nothing needs to be wired to it.
 ```bash
 python tools/protocol_conformance.py <ip> --motion    # the binary protocol over the network (the axes "move": no motors, or a free machine)
 python tools/grbl_serial_test.py COM14                # the G-code interface on the USB port: moves, arcs, hold, jog and jog cancel, reset, no drift
+python tools/grbl_serial_test.py <ip>                 # the same interface over the network (telnet, port 23)
 python tools/ugs_serial_test.py COM14                 # TiggyUGS's own serial connection and sender against it (needs TiggyUGS's source)
+python tools/latency_test.py <ip>                     # how promptly the controller answers over the network: median and worst case
 ```
 
 ## Documentation
