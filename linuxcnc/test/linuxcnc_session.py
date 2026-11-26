@@ -80,6 +80,20 @@ class Session:
         self.s.poll()
         return self.s
 
+    def state_name(self):
+        names = {linuxcnc.STATE_ESTOP: "E-stop", linuxcnc.STATE_ESTOP_RESET: "E-stop reset",
+                 linuxcnc.STATE_ON: "on", linuxcnc.STATE_OFF: "off"}
+        state = self.poll().task_state
+        return "%s (estop-latch ok-out %s, tiggy.fault %s, tiggy.ready %s)" % (
+            names.get(state, state), self.pin("estop-latch.0.ok-out"), self.pin("tiggy.fault"), self.pin("tiggy.ready"))
+
+    def wait_state(self, state, timeout, what):
+        deadline = time.time() + timeout
+        while self.poll().task_state != state:
+            if time.time() > deadline:
+                raise Failure("%s: LinuxCNC is in state %s" % (what, self.state_name()))
+            time.sleep(0.02)
+
     def wait_for(self, cond, timeout, what):
         deadline = time.time() + timeout
         while not cond():
@@ -139,15 +153,18 @@ class Session:
     def mdi(self, text, timeout=60):
         self.mode(linuxcnc.MODE_MDI)
         self.c.mdi(text)
-        check(self.c.wait_complete(timeout) != -1, "MDI '%s' did not finish" % text)
+        result = self.c.wait_complete(timeout)
+        check(result != -1, "MDI '%s' did not finish" % text)
+        check(result == linuxcnc.RCS_DONE, "MDI '%s' was refused: %s" % (text, "; ".join(self.errors())))
         self.settle()
 
     def machine_on(self):
         self.c.state(linuxcnc.STATE_ESTOP_RESET)
         self.c.wait_complete()
+        self.wait_state(linuxcnc.STATE_ESTOP_RESET, 5, "E-stop was reset")
         self.c.state(linuxcnc.STATE_ON)
         self.c.wait_complete()
-        self.wait_for(lambda: self.poll().task_state == linuxcnc.STATE_ON, 5, "machine on")
+        self.wait_state(linuxcnc.STATE_ON, 5, "the machine was switched on")
         self.wait_for(lambda: self.sim.get()["state"] == "IDLE", 5, "the controller to be ready")
 
     def home_all(self, timeout=120):
@@ -161,8 +178,10 @@ class Session:
     # ---- steps
     def step_ready(self):
         self.wait_for(lambda: self.pin("tiggy.ready"), 15, "tiggy.ready")
-        check(self.poll().task_state == linuxcnc.STATE_ESTOP, "LinuxCNC should start in E-stop")
-        check(self.sim.get()["state"] == "ESTOP", "the controller should be held stopped while the machine is off")
+        time.sleep(1.0)                     # LinuxCNC's own parts are still starting
+        self.wait_state(linuxcnc.STATE_ESTOP, 5, "LinuxCNC should start in E-stop")
+        self.wait_for(lambda: self.sim.get()["state"] == "ESTOP", 3,
+                      "the controller to be held stopped while the machine is off")
         self.rebase()
         self.errors()
 
@@ -194,9 +213,10 @@ class Session:
         self.c.auto(linuxcnc.AUTO_RUN, 0)
         time.sleep(1.5)
         # feed hold in the middle of it, then carry on
+        check(self.poll().interp_state != linuxcnc.INTERP_IDLE, "the program is not running: %s"
+              % "; ".join(self.errors()))
         self.c.auto(linuxcnc.AUTO_PAUSE)
-        self.wait_for(lambda: not self.sim.get()["moving"], 3, "the machine to pause")
-        time.sleep(0.3)
+        self.settle(10)
         self.check_position("paused")
         self.c.auto(linuxcnc.AUTO_RESUME)
         self.wait_for(lambda: self.poll().interp_state == linuxcnc.INTERP_IDLE, 120, "the program to end")
@@ -263,7 +283,7 @@ class Session:
 
         # the button on the controller
         self.sim.set(estop=1)
-        self.wait_for(lambda: self.poll().task_state == linuxcnc.STATE_ESTOP, 2, "LinuxCNC to go into E-stop")
+        self.wait_state(linuxcnc.STATE_ESTOP, 3, "the controller's E-stop input was operated")
         check(any("E-stop" in e for e in self.errors()), "no message about the E-stop input")
         self.sim.set(estop=0)
         self.wait_for(lambda: self.pin("tiggy.ready"), 2, "ready after the button is released")
