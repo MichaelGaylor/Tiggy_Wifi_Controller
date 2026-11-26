@@ -21,6 +21,13 @@ typedef void (*gcode_output_fn)(const char *str, size_t len, void *ctx);
 #define GRBL_RT_FEED_HOLD       '!'
 #define GRBL_RT_CYCLE_START     '~'
 #define GRBL_RT_SOFT_RESET      0x18    /* Ctrl-X */
+#define GRBL_RT_JOG_CANCEL      0x85
+
+/* Is this byte a real-time command?  As in Grbl 1.1, every byte from 0x80 up
+ * is one and never part of a line - those this firmware does not act on
+ * (the overrides) are dropped rather than left to spoil the line around them. */
+#define GRBL_IS_REALTIME(b) ((b) == GRBL_RT_STATUS_QUERY || (b) == GRBL_RT_FEED_HOLD || \
+                             (b) == GRBL_RT_CYCLE_START || (b) == GRBL_RT_SOFT_RESET || (b) >= 0x80)
 
 /* Initialize the G-code interface (creates queue, inits parser+planner) */
 void gcode_interface_init(void);

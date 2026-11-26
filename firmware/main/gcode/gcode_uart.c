@@ -71,10 +71,7 @@ void gcode_uart_task(void *pvParameters)
             uint8_t byte = rx_buf[i];
 
             /* Real-time commands — handled immediately */
-            if (byte == GRBL_RT_STATUS_QUERY ||
-                byte == GRBL_RT_FEED_HOLD ||
-                byte == GRBL_RT_CYCLE_START ||
-                byte == GRBL_RT_SOFT_RESET) {
+            if (GRBL_IS_REALTIME(byte)) {
                 gcode_handle_realtime(byte);
                 continue;
             }

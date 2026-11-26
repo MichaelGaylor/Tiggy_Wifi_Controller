@@ -102,6 +102,7 @@ void gcode_planner_sync_position(gcode_planner_t *planner)
     for (int i = 0; i < GCODE_MAX_AXES; i++) {
         planner->position_mm[i] = (float)planner->position_steps[i]
                                   / planner->steps_per_mm[i];
+        planner->head_steps[i] = planner->position_steps[i];
     }
 }
 
@@ -380,7 +381,7 @@ void gcode_planner_line(gcode_planner_t *planner,
     for (int i = 0; i < GCODE_MAX_AXES; i++) {
         block->target[i] = target[i];
         float delta_mm = target[i] - planner->position_mm[i];
-        block->steps[i] = (int32_t)lroundf(delta_mm * planner->steps_per_mm[i]);
+        block->steps[i] = (int32_t)lroundf(target[i] * planner->steps_per_mm[i]) - planner->head_steps[i];
         dist_sqr += delta_mm * delta_mm;
 
         uint32_t abs_steps = (uint32_t)abs(block->steps[i]);
@@ -470,6 +471,7 @@ void gcode_planner_line(gcode_planner_t *planner,
     /* Update position tracking */
     for (int i = 0; i < GCODE_MAX_AXES; i++) {
         planner->position_mm[i] = target[i];
+        planner->head_steps[i] += block->steps[i];
     }
 
     /* Advance head */
@@ -552,6 +554,11 @@ void gcode_planner_clear(gcode_planner_t *planner)
 bool gcode_planner_is_idle(gcode_planner_t *planner)
 {
     return (planner->count == 0) && planner_is_empty() && !stepper_is_running();
+}
+
+bool gcode_planner_holding(gcode_planner_t *planner)
+{
+    return planner->count > 0 || planner->smooth_pending;
 }
 
 void gcode_planner_set_path_mode(gcode_planner_t *planner,

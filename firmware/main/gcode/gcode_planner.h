@@ -83,6 +83,11 @@ typedef struct {
 
     /* Position tracking (steps, matches stepper) */
     int32_t  position_steps[GCODE_MAX_AXES];
+    /* Where the last move planned ends, in whole steps.  Each move's steps
+     * are the difference between its target, rounded to a step, and this -
+     * not its own length rounded, which would let up to half a step of
+     * error per move add up over a program. */
+    int32_t  head_steps[GCODE_MAX_AXES];
 
     /* Position tracking (mm, for target computation) */
     float    position_mm[GCODE_MAX_AXES];
@@ -158,6 +163,10 @@ void gcode_planner_clear(gcode_planner_t *planner);
 
 /* Check if planner is empty and all segments emitted */
 bool gcode_planner_is_idle(gcode_planner_t *planner);
+
+/* Moves are being held back for look-ahead or corner smoothing: nothing of
+ * them has gone to the motion code yet. */
+bool gcode_planner_holding(gcode_planner_t *planner);
 
 /* Set path blending mode (G61/G64) */
 void gcode_planner_set_path_mode(gcode_planner_t *planner,

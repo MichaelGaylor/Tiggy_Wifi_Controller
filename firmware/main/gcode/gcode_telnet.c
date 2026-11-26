@@ -75,19 +75,16 @@ static void handle_client(int sock)
         for (int i = 0; i < n; i++) {
             uint8_t byte = rx_buf[i];
 
-            /* Check for real-time commands (handled immediately) */
-            if (byte == GRBL_RT_STATUS_QUERY ||
-                byte == GRBL_RT_FEED_HOLD ||
-                byte == GRBL_RT_CYCLE_START ||
-                byte == GRBL_RT_SOFT_RESET) {
-                gcode_handle_realtime(byte);
-                continue;
-            }
-
             /* Skip telnet IAC sequences (0xFF ...) */
             if (byte == 0xFF) {
                 /* Skip next 2 bytes of telnet command */
                 i += 2;
+                continue;
+            }
+
+            /* Check for real-time commands (handled immediately) */
+            if (GRBL_IS_REALTIME(byte)) {
+                gcode_handle_realtime(byte);
                 continue;
             }
 

@@ -46,6 +46,8 @@ static void *s_output_ctx;
 
 static volatile bool s_active;          /* G-code mode active */
 static volatile bool s_reset_pending;   /* Soft reset requested */
+static volatile bool s_jog_active;      /* a $J= move is queued or playing */
+static volatile bool s_jog_cancel;      /* jog cancel asked for: tidy up once the axes are at rest */
 
 /* WCO report interval (send every N status queries) */
 #define WCO_REPORT_INTERVAL  10
@@ -522,6 +524,7 @@ static void handle_dollar_command(const char *line)
         } else {
             /* Flush jog block immediately — jog moves are standalone
              * (start/stop at zero speed), no look-ahead benefit */
+            s_jog_active = true;
             gcode_planner_sync(&s_planner);
             send_ok();
         }
@@ -566,8 +569,12 @@ int gcode_format_status_report(char *buf, size_t buf_size)
     /* State name */
     const char *state_name;
     switch (motion_get_state()) {
-    case WCNC_STATE_IDLE:    state_name = "Idle"; break;
-    case WCNC_STATE_RUN:     state_name = "Run"; break;
+    case WCNC_STATE_IDLE:
+        /* a move accepted but not yet started is not "Idle" to a sender waiting for the end of it */
+        state_name = gcode_planner_is_idle(&s_planner) && !gcode_planner_holding(&s_planner) ? "Idle"
+                   : s_jog_active ? "Jog" : "Run";
+        break;
+    case WCNC_STATE_RUN:     state_name = s_jog_active ? "Jog" : "Run"; break;
     case WCNC_STATE_HOLD:    state_name = "Hold:0"; break;
     case WCNC_STATE_JOG:     state_name = "Jog"; break;
     case WCNC_STATE_HOMING:  state_name = "Home"; break;
@@ -690,9 +697,40 @@ void gcode_handle_realtime(uint8_t cmd)
         break;
 
     case GRBL_RT_SOFT_RESET:
-        s_reset_pending = true;
+        /* Stop the axes here and now.  The G-code task does the rest of
+         * the reset when it comes round - which, if it is waiting for the
+         * motion to end (program end, dwell, a tool change), it would
+         * otherwise only do once the machine had run everything queued. */
+        if (!s_reset_pending) {
+            s_reset_pending = true;
+            motion_estop();
+        }
         break;
+
+    case GRBL_RT_JOG_CANCEL:
+        /* Slow to a stop and drop the rest of the jog (ignored outside a
+         * jog, as in Grbl).  The stop is asked for here, at once; the
+         * G-code task puts its own books straight when the axes are at rest. */
+        if (s_jog_active && !s_jog_cancel) {
+            s_jog_cancel = true;
+            motion_reset();
+        }
+        break;
+
+    default:
+        break;                              /* overrides and the like: not acted on */
     }
+}
+
+/* The rest of a jog cancel, in the G-code task. */
+static void finish_jog_cancel(void)
+{
+    gcode_planner_clear(&s_planner);
+    for (int n = 0; n < 400 && stepper_is_running(); n++) vTaskDelay(pdMS_TO_TICKS(5));
+    gcode_planner_sync_position(&s_planner);
+    for (int i = 0; i < GCODE_MAX_AXES; i++) s_state.position[i] = s_planner.position_mm[i];
+    s_jog_active = false;
+    s_jog_cancel = false;
 }
 
 /* ===================================================================
@@ -725,6 +763,8 @@ static void perform_soft_reset(void)
     while (xQueueReceive(s_line_queue, discard, 0) == pdTRUE) {}
 
     s_reset_pending = false;
+    s_jog_active = false;
+    s_jog_cancel = false;
 
     /* 6. Send welcome message */
     send_string("\r\nGrbl 1.1h ['$' for help]\r\n");
@@ -783,11 +823,24 @@ void gcode_exec_task(void *pvParameters)
         if (s_reset_pending) {
             perform_soft_reset();
         }
+        if (s_jog_cancel) {
+            finish_jog_cancel();
+        }
 
         /* Wait for a line from the queue */
         if (xQueueReceive(s_line_queue, line, pdMS_TO_TICKS(100)) != pdTRUE) {
+            /* Nothing more has come for a tenth of a second.  Moves still
+             * held back for look-ahead will not get any better by waiting:
+             * play them.  (Without this the last move sent - a single line
+             * typed into a sender - stood still until another line came.) */
+            if (gcode_planner_holding(&s_planner) && !s_planner.preempted &&
+                motion_get_state() != WCNC_STATE_HOLD) {
+                gcode_planner_sync(&s_planner);
+                continue;
+            }
             /* No line — keep position in sync */
             if (gcode_planner_is_idle(&s_planner)) {
+                s_jog_active = false;
                 /* Periodically sync position from stepper when idle */
                 gcode_planner_sync_position(&s_planner);
                 for (int i = 0; i < GCODE_MAX_AXES; i++) {
@@ -830,6 +883,7 @@ void gcode_exec_task(void *pvParameters)
             handle_dollar_command(line);
             continue;
         }
+        s_jog_active = false;               /* ordinary G-code from here on */
 
         /* Parse G-code line */
         gcode_error_t err = gcode_parse_line(line, &block, &s_state);

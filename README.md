@@ -149,6 +149,16 @@ linuxcnc/test/run_in_linuxcnc.sh          # the same driver inside a real LinuxC
 ```
 
 
+### With a board on the bench
+
+A bare dev board is enough; nothing needs to be wired to it.
+
+```bash
+python tools/protocol_conformance.py <ip> --motion    # the binary protocol over the network (the axes "move": no motors, or a free machine)
+python tools/grbl_serial_test.py COM14                # the G-code interface on the USB port: moves, arcs, hold, jog and jog cancel, reset, no drift
+python tools/ugs_serial_test.py COM14                 # TiggyUGS's own serial connection and sender against it (needs TiggyUGS's source)
+```
+
 ## Documentation
 
 - [User Manual](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/plugin_manual.html) -- full plugin configuration guide ([markdown](Tiggy_Plugin_Manual.md))
