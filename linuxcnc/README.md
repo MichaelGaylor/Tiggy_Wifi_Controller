@@ -102,7 +102,8 @@ Loaded with `loadrt tiggy ip=<address or auto> joints=<1-6> [io_ip=<address or a
 | `tiggy.N.counts` | s32 out | the same in steps |
 | `tiggy.N.homing` | bit in | from `joint.N.homing`: lets the joint run onto a limit switch |
 | `tiggy.enable` | bit in | machine on (`motion.motion-enabled`). While false the controller is held stopped, drivers and outputs off |
-| `tiggy.ready` | bit out | for the E-stop chain (`iocontrol.0.emc-enable-in`). False while the controller cannot be reached, its E-stop input is operated, or it has stopped by itself |
+| `tiggy.fault` | bit out | for the E-stop chain (the `fault-in` of an `estop_latch`). True while the controller cannot be reached, its E-stop input is operated, or it has stopped by itself |
+| `tiggy.ready` | bit out | the opposite of `tiggy.fault` |
 | `tiggy.connected` | bit out | the controller is answering |
 | `tiggy.switch.0` ... `.5` (and `-not`) | bit out | the six limit / home inputs |
 | `tiggy.probe` | bit out | probe input |

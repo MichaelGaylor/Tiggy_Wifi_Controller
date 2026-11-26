@@ -26,12 +26,14 @@
  *   MIN_FERROR in the INI file must allow for about half a second of travel
  *   at the joint's top speed.
  *
- *   tiggy.ready belongs in the E-stop chain (iocontrol.0.emc-enable-in): it
- *   is false while the controller cannot be reached, while its E-stop input
- *   is operated, and after the controller has stopped for a reason of its
- *   own (a limit switch, lost contact) until LinuxCNC has switched off.
- *   tiggy.enable is "machine on" (motion.motion-enabled): while it is false
- *   the controller is held stopped with its drivers and outputs off.
+ *   tiggy.fault belongs in the E-stop chain (the fault-in of an estop_latch,
+ *   whose ok-out goes to iocontrol.0.emc-enable-in): it is true while the
+ *   controller cannot be reached, while its E-stop input is operated, and
+ *   after the controller has stopped for a reason of its own (a limit
+ *   switch, lost contact) until LinuxCNC has switched off.  tiggy.ready is
+ *   the same thing the other way up.  tiggy.enable is "machine on"
+ *   (motion.motion-enabled): while it is false the controller is held
+ *   stopped with its drivers and outputs off.
  *
  * Build:  sudo halcompile --install tiggy.c
  *         (wifi_cnc_protocol.h in the same folder, or in ../protocol)
@@ -258,7 +260,7 @@ typedef struct {
     struct { hal_bit_t *in, *in_not; } aux_in[AUX_INPUTS];
     hal_bit_t   *aux_out[AUX_OUTPUTS];
 
-    hal_bit_t   *enable, *ready, *connected, *probe, *estop;
+    hal_bit_t   *enable, *ready, *fault, *connected, *probe, *estop;
     hal_bit_t   *spindle_fwd, *spindle_rev, *flood, *mist;
     hal_float_t *spindle_speed, *spindle_rps, *spindle_rpm;
     hal_float_t *buffer_ms;
@@ -416,6 +418,7 @@ static void tg_read(void *arg, long period)
     }
     *h->connected = a.online;
     *h->ready = a.ready;
+    *h->fault = !a.ready;
     *h->probe = a.probe;
     *h->estop = a.estop;
     *h->spindle_rpm = (double)a.rpm;
@@ -1761,6 +1764,8 @@ static int export_pins(tg_hal_t *h)
 
     CHECK(hal_pin_bit_newf(HAL_IN, &h->enable, comp_id, COMP ".enable"));
     CHECK(hal_pin_bit_newf(HAL_OUT, &h->ready, comp_id, COMP ".ready"));
+    CHECK(hal_pin_bit_newf(HAL_OUT, &h->fault, comp_id, COMP ".fault"));
+    *h->fault = 1;                      /* until the controller is known to be ready */
     CHECK(hal_pin_bit_newf(HAL_OUT, &h->connected, comp_id, COMP ".connected"));
     CHECK(hal_pin_bit_newf(HAL_OUT, &h->probe, comp_id, COMP ".probe"));
     CHECK(hal_pin_bit_newf(HAL_OUT, &h->estop, comp_id, COMP ".estop-input"));

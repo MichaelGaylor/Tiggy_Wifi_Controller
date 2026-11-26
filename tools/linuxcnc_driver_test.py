@@ -226,7 +226,9 @@ class Tests:
         self.sim.extra = list(sim_extra)
         self.sim.start()
         self.rig.start(ip, 3, io_ip)
+        check(self.rig.get("tiggy.fault") == 1, "tiggy.fault must be true until the controller is ready")
         wait_for(lambda: self.rig.get("tiggy.ready") == 1, 8, "tiggy.ready")
+        check(self.rig.get("tiggy.fault") == 0, "tiggy.fault should be false once ready")
         self.rebase()
 
     def tear_down(self):
@@ -547,6 +549,7 @@ class Tests:
         time.sleep(0.6)
         sim.set(estop=1)
         wait_for(lambda: r.get("tiggy.ready") == 0, 0.5, "tiggy.ready to go false")
+        check(r.get("tiggy.fault") == 1, "tiggy.fault should be true when tiggy.ready is false")
         check(r.get("tiggy.estop-input") == 1, "tiggy.estop-input should be true")
         check(any("E-stop" in e for e in r.errors()), "no message about the E-stop")
         r.machine(False)                    # what LinuxCNC does when its E-stop chain opens
