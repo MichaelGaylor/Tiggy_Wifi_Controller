@@ -9,7 +9,7 @@ Replaces parallel port drivers with a WiFi or Ethernet-connected motion controll
 | Component | Download | Description |
 |-----------|----------|-------------|
 | **ESP32 Firmware** | [Flash from browser](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/) | One-click web flasher (Chrome/Edge) |
-| **LinuxCNC** | [Tiggy-LinuxCNC.tar.gz](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz) | HAL component + interactive installer |
+| **LinuxCNC** | [Tiggy-LinuxCNC.tar.gz](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/Tiggy-LinuxCNC.tar.gz) | Driver, installer and set-up wizard |
 | **Mach3 Plugin** | [www.tiggyengineering.com](https://www.tiggyengineering.com) | Windows plugin (free: 3-axis, Pro: 6-axis) |
 | **Protocol Tester** | [TiggyProtocolTester.exe](https://github.com/MichaelGaylor/Tiggy_Wifi_Controller/releases/latest/download/TiggyProtocolTester.exe) | Windows GUI for testing and configuring |
 
@@ -19,14 +19,13 @@ Firmware and LinuxCNC builds are created automatically via GitHub Actions.
 
 - Up to **6 axes** (X, Y, Z, A, B, C) with independent step/direction control
 - **WiFi or Ethernet** (W5500) connectivity -- auto-detected, no configuration needed
+- Motion streamed from the host as timed segments with acknowledgement: evenly spaced pulses, and lost or repeated packets can never lose or repeat a step
+- Safe when the host goes away: host watchdog, jog deadman, outputs off on E-stop
 - GRBL-compatible serial/telnet interface for standalone use
-- Real-time position feedback and DRO display
-- Limit switches, home switches, E-stop, and probe inputs
-- Spindle PWM (CW/CCW), coolant (flood/mist), charge pump outputs
-- **Spindle encoder** feedback for threading (G33/G76) and CSS (G96)
-- Misc outputs and inputs with function mapping (count varies by board)
+- Homing, limit switches, E-stop and probe inputs, handled in the controller
+- Spindle on/off or PWM, charge pump, auxiliary outputs and inputs (count varies by board)
+- Spindle encoder speed feedback
 - Optional **I/O expansion module** (pendant buttons, relay outputs)
-- Board pin map profiles for different hardware configurations
 - Auto-discovery and automatic reconnection
 
 ## Supported Hardware
@@ -57,26 +56,27 @@ pio run -e esp32s3-zero -t upload       # Tiggy Standard board (3 wired axes)
 ### LinuxCNC
 
 ```bash
+sudo apt install linuxcnc-uspace linuxcnc-uspace-dev   # already there on the LinuxCNC live image
 tar xzf Tiggy-LinuxCNC.tar.gz
 cd linuxcnc-package
-chmod +x install.sh
-./install.sh    # Interactive setup wizard
+./install.sh    # builds the driver, then asks about your machine
 ```
 
 Or double-click `install.desktop` from your file manager.
 
-**Prerequisites:** `sudo apt install linuxcnc-uspace linuxcnc-uspace-dev`
+The installer writes a complete configuration to `~/linuxcnc/configs`. No realtime kernel is needed: LinuxCNC plans the motion and the controller makes the step pulses. What to expect, and every pin and setting of the `tiggy` driver, is in [linuxcnc/README.md](linuxcnc/README.md).
 
 ### Mach3 (Windows)
 
 Download the Mach3 plugin from [www.tiggyengineering.com](https://www.tiggyengineering.com), then:
 
-1. Extract `Tiggy.dll` and `*.pinmap` to `C:\Mach3\PlugIns\`
-2. Extract `M62-M65.m1s` to `C:\Mach3\macros\Mach3Mill\`
-3. Config > Select Motion Device > Tiggy Motion Controller
-4. Restart Mach3
+1. Copy `Tiggy.dll` to `C:\Mach3\PlugIns\` and `M62-M65.m1s` to `C:\Mach3\macros\Mach3Mill\`
+2. Start Mach3 and choose **Tiggy Motion Controller** as the motion device
+3. Set the machine up in Mach3's own Config menu (Motor Tuning, Ports and Pins, Homing/Limits) -- the plugin finds the controller by itself
 
-**Free tier**: 3 axes (X/Y/Z). **Pro Mach3 license**: 6 axes, I/O expansion module, spindle encoder threading. Note: this axis limit applies **only to the Mach3 plugin**. LinuxCNC, GRBL senders, and all other host software get full 6-axis support for free.
+Plugin 2.0 needs controller firmware 1.2.0 or newer. See the [User Manual](Tiggy_Plugin_Manual.md).
+
+**Free tier**: 3 axes (X/Y/Z). **Pro Mach3 license**: 6 axes, slaved axes, I/O expansion module. Note: this axis limit applies **only to the Mach3 plugin**. LinuxCNC, GRBL senders, and all other host software get full 6-axis support for free.
 
 ## Architecture
 
@@ -90,9 +90,31 @@ Mach3 / LinuxCNC / Serial Terminal
         Step/Dir/Enable/Spindle/IO GPIO
 ```
 
-- **TCP** (port 58429): Handshake, configuration, commands
-- **UDP** (port 58427/58428): Real-time motion packets and status reports
-- **Protocol**: Defined in `protocol/wifi_cnc_protocol.h`
+- **TCP** (port 58429): Handshake, configuration, keep-alive
+- **UDP** (port 58427): Motion stream, jog, home, outputs, E-stop; status reports go back to the host
+- **Protocol**: Defined in `protocol/wifi_cnc_protocol.h` (version 1.2)
+
+## Testing without hardware
+
+The firmware's motion code (`firmware/main/motion`) is plain C that also builds on a PC, where it runs behind the real network ports with a simulated machine attached:
+
+```bash
+firmware/test/pc/build.sh                 # or build.bat on Windows: builds the test library, runs the unit test
+python tools/firmware_sim.py              # the firmware's motion code as a controller on this PC
+python tools/protocol_conformance.py --sim --motion 127.0.0.1    # protocol tests
+python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, starved stream, pulse spacing
+```
+
+Host software (the Mach3 plugin, LinuxCNC) connects to it like to a board. `tools/tiggy_sim.py` is an independent model of the same protocol in Python; the conformance tests hold both to one behaviour, and can be run against a real board too (`protocol_conformance.py <ip>`, add `--motion` only when the motors are free to move).
+
+The LinuxCNC driver is tested the same way. It builds, unchanged, around a stand-in for LinuxCNC and is run against the firmware simulator (it starts its own simulators, so close one you started by hand first):
+
+```bash
+linuxcnc/test/build.sh                    # or build.bat on Windows
+python tools/linuxcnc_driver_test.py      # moves to the step, packet loss, a stalling PC, E-stop, limits, reconnection
+linuxcnc/test/run_in_linuxcnc.sh          # the same driver inside a real LinuxCNC (Linux with linuxcnc-uspace-dev)
+```
+
 
 ## Documentation
 

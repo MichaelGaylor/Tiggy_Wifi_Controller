@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]      # dev: build and test only; nothing is published from it
   pull_request:
     branches: [main]
 
@@ -52,8 +52,58 @@ jobs:
             firmware/.pio/build/${{ matrix.board }}/bootloader.bin
             firmware/.pio/build/${{ matrix.board }}/partitions.bin
 
+  test-motion-code:
+    name: Test the firmware's motion code (PC build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build for the PC and run the step timing unit test
+        run: sh firmware/test/pc/build.sh
+
+      - name: Protocol conformance and firmware self-tests
+        run: |
+          python tools/firmware_sim.py --quiet &
+          sleep 3
+          python tools/protocol_conformance.py --sim --motion 127.0.0.1
+          python tools/firmware_selftest.py
+
+  test-linuxcnc-driver:
+    name: Test the LinuxCNC driver
+    runs-on: ubuntu-latest
+    container: debian:trixie        # Debian 13 has LinuxCNC 2.9 as a package; Ubuntu does not
+    steps:
+      - name: Install LinuxCNC and the build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            linuxcnc-uspace linuxcnc-uspace-dev build-essential python3 sudo git ca-certificates procps
+
+      - uses: actions/checkout@v4
+
+      - name: An ordinary user (LinuxCNC refuses to run as root)
+        run: |
+          useradd -m tester
+          echo "tester ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/tester
+          chown -R tester "$GITHUB_WORKSPACE"
+
+      - name: Driver against the firmware simulator
+        run: |
+          bash linuxcnc/test/ci_step.sh "Simulator build" sudo -u tester -H sh firmware/test/pc/build.sh
+          bash linuxcnc/test/ci_step.sh "Driver build with gcc" sudo -u tester -H sh linuxcnc/test/build.sh
+          bash linuxcnc/test/ci_step.sh "Driver against the simulator" sudo -u tester -H python3 tools/linuxcnc_driver_test.py -v --lenient
+
+      - name: Driver inside LinuxCNC
+        run: bash linuxcnc/test/ci_step.sh "Driver inside LinuxCNC" sudo -u tester -H bash linuxcnc/test/run_in_linuxcnc.sh
+
   build-linux:
     name: Package LinuxCNC installer
+
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -61,13 +111,15 @@ jobs:
       - name: Package LinuxCNC files
         run: |
           mkdir -p linuxcnc-package
-          cp linuxcnc/wifi_cnc.c linuxcnc-package/
+          cp linuxcnc/tiggy.c linuxcnc-package/
+          cp linuxcnc/tiggy_setup.py linuxcnc-package/
           cp linuxcnc/install.sh linuxcnc-package/
           cp linuxcnc/install.desktop linuxcnc-package/
-          cp linuxcnc/build.sh linuxcnc-package/
+          cp linuxcnc/README.md linuxcnc-package/
           cp protocol/wifi_cnc_protocol.h linuxcnc-package/
           chmod +x linuxcnc-package/install.sh
           chmod +x linuxcnc-package/install.desktop
+          chmod +x linuxcnc-package/tiggy_setup.py
 
       - name: Upload LinuxCNC package
         uses: actions/upload-artifact@v4
@@ -103,7 +155,7 @@ jobs:
 
   update-flasher:
     name: Update web flasher binaries
-    needs: [build-firmware]
+    needs: [build-firmware, test-motion-code]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -139,7 +191,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-firmware, build-linux, build-gui]
+    needs: [build-firmware, test-motion-code, build-linux, build-gui]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -184,7 +236,7 @@ jobs:
             - **firmware-esp32s3-zero.zip** - 3-axis Waveshare S3-Zero
 
             ## LinuxCNC
-            - **Tiggy-LinuxCNC.tar.gz** - HAL component source + interactive installer
+            - **Tiggy-LinuxCNC.tar.gz** - LinuxCNC driver with its installer and set-up wizard
 
             ## Protocol Tester
             - **TiggyProtocolTester.exe** - Windows GUI for testing and configuring the controller

@@ -1,0 +1,5 @@
+# What runs on Linux keeps Unix line endings on every machine it is checked
+# out on; Windows batch files keep theirs.
+*.sh            text eol=lf
+linuxcnc/**     text eol=lf
+*.bat           text eol=crlf

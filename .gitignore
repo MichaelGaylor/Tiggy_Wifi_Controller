@@ -3,9 +3,10 @@ firmware/.pio/
 firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/sdkconfig.esp32s3-*
+firmware/sdkconfig.esp32-*
 plugin/WiFiCNC/obj/
 plugin/WiFiCNC/bin/
-tools/__pycache__/
+__pycache__/
 *.map
 
 # Reverse-engineering / analysis files (large, not product code)
@@ -36,3 +37,8 @@ run_check.bat
 # OS
 Thumbs.db
 .DS_Store
+
+# PC build of the motion code (firmware/test/pc/build.bat, build.sh)
+firmware/test/pc/build/
+# PC build of the LinuxCNC driver and its test rig (linuxcnc/test/build.bat, build.sh)
+linuxcnc/test/build/
