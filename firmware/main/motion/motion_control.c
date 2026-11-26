@@ -153,6 +153,11 @@ void mc_hal_identity(uint8_t *capabilities, uint8_t mac[6], char name[WCNC_DEVIC
 bool mc_hal_legacy_pop(wcnc_motion_segment_t *seg)        { return planner_pop_segment(seg); }
 bool mc_hal_legacy_push(const wcnc_motion_segment_t *seg) { return planner_push_segment(seg); }
 void mc_hal_legacy_clear(void)                            { planner_drain(); }
+void mc_hal_legacy_space(uint16_t *free_slots, uint16_t *total)
+{
+    *free_slots = planner_available();
+    *total = planner_capacity();
+}
 
 void mc_hal_log(const char *text)
 {

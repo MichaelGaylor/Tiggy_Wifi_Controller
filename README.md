@@ -128,11 +128,13 @@ The firmware's motion code (`firmware/main/motion`) is plain C that also builds 
 firmware/test/pc/build.sh                 # or build.bat on Windows: builds the test library, runs the unit test
 python tools/firmware_sim.py              # the firmware's motion code as a controller on this PC
 python tools/protocol_conformance.py --sim --motion 127.0.0.1    # protocol tests
-python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, starved stream, pulse spacing
+python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, older hosts, starved stream, pulse spacing
 python tools/threading_test.py            # screw cutting: every step of a pass against the angle of a simulated spindle
+python tools/ugs_compat_test.py           # TiggyUGS's own connection, planner and sender code against the firmware
+                                          # (needs TiggyUGS's source and its Python packages: see the file)
 ```
 
-Host software (the Mach3 plugin, LinuxCNC) connects to it like to a board. `tools/tiggy_sim.py` is an independent model of the same protocol in Python; the conformance tests hold both to one behaviour, and can be run against a real board too (`protocol_conformance.py <ip>`, add `--motion` only when the motors are free to move).
+Host software (the Mach3 plugin, LinuxCNC, TiggyUGS) connects to it like to a board. Hosts written for protocol 1.0 or 1.1 keep working with firmware 1.2: their speed-described segments are played as before, the status report shows them the room in the queue those wait in, and their reset packet stops and drops what they sent. `tools/tiggy_sim.py` is an independent model of the same protocol in Python; the conformance tests hold both to one behaviour, and can be run against a real board too (`protocol_conformance.py <ip>`, add `--motion` only when the motors are free to move).
 
 The LinuxCNC driver is tested the same way. It builds, unchanged, around a stand-in for LinuxCNC and is run against the firmware simulator (it starts its own simulators, so close one you started by hand first):
 

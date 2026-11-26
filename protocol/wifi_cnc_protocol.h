@@ -87,7 +87,9 @@ typedef enum {
     WCNC_PKT_ESTOP             = 0x04,
     WCNC_PKT_FEED_HOLD         = 0x05,
     WCNC_PKT_FEED_RESUME       = 0x06,
-    WCNC_PKT_RESET             = 0x07,
+    WCNC_PKT_RESET             = 0x07,   /* Leave E-stop / alarm.  While speed-described segments
+                                            (hosts older than 1.2) are playing: slow to a stop and
+                                            drop them - such a host has no WCNC_PKT_STREAM_FLUSH. */
     WCNC_PKT_HOME_COMMAND      = 0x08,
     WCNC_PKT_IO_CONTROL        = 0x09,   /* Real-time output control (UDP) */
     WCNC_PKT_STREAM_FLUSH      = 0x0A,   /* v1.2: stop, discard queued motion, start a new stream */
@@ -500,8 +502,11 @@ typedef struct WCNC_PACKED {
 
 typedef struct WCNC_PACKED {
     int32_t  position_steps[WCNC_MAX_AXES];
-    uint16_t buffer_available;       /* Free slots in ring buffer */
-    uint16_t buffer_total;           /* Total ring buffer capacity */
+    uint16_t buffer_available;       /* Free slots in the motion queue in use: of timed segments,
+                                        or - while a host older than 1.2 (or G-code mode) is
+                                        feeding them - of speed-described segments, which is
+                                        what such a host paces itself by */
+    uint16_t buffer_total;           /* Capacity of that queue */
     uint8_t  state;                  /* wcnc_machine_state_t */
     uint8_t  alarm_code;             /* wcnc_alarm_code_t */
     uint8_t  limit_switches;         /* Bitmask: bit 0=X, bit 5=C */

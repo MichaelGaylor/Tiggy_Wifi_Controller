@@ -71,6 +71,8 @@ void     mc_hal_identity(uint8_t *capabilities, uint8_t mac[6], char name[WCNC_D
 bool     mc_hal_legacy_pop(wcnc_motion_segment_t *seg);
 bool     mc_hal_legacy_push(const wcnc_motion_segment_t *seg);
 void     mc_hal_legacy_clear(void);
+/* Room in that queue: what a host older than 1.2 paces itself by. */
+void     mc_hal_legacy_space(uint16_t *free_slots, uint16_t *total);
 void     mc_hal_log(const char *text);
 
 /* ---------------------------------------------------------------------

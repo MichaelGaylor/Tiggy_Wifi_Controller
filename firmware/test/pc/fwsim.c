@@ -425,21 +425,23 @@ void mc_hal_identity(uint8_t *caps, uint8_t mac[6], char name[WCNC_DEVICE_NAME_L
     snprintf(name, WCNC_DEVICE_NAME_LEN, "%s", device_name());
 }
 
-/* Old-form segments: a small queue standing in for the firmware's planner buffer */
-static wcnc_motion_segment_t s_legacy[64];
+/* Old-form segments: a queue standing in for the firmware's planner buffer, and of its size
+ * (CFG_PLANNER_BUFFER_SIZE in config.h) - hosts older than protocol 1.2 pace themselves by it */
+#define LEGACY_SLOTS 128
+static wcnc_motion_segment_t s_legacy[LEGACY_SLOTS];
 static int s_leg_head = 0, s_leg_tail = 0;
 
 bool mc_hal_legacy_pop(wcnc_motion_segment_t *seg)
 {
     if (s_leg_tail == s_leg_head) return false;
     *seg = s_legacy[s_leg_tail];
-    s_leg_tail = (s_leg_tail + 1) % 64;
+    s_leg_tail = (s_leg_tail + 1) % LEGACY_SLOTS;
     return true;
 }
 
 bool mc_hal_legacy_push(const wcnc_motion_segment_t *seg)
 {
-    int next = (s_leg_head + 1) % 64;
+    int next = (s_leg_head + 1) % LEGACY_SLOTS;
     if (next == s_leg_tail) return false;
     s_legacy[s_leg_head] = *seg;
     s_leg_head = next;
@@ -447,6 +449,13 @@ bool mc_hal_legacy_push(const wcnc_motion_segment_t *seg)
 }
 
 void mc_hal_legacy_clear(void) { s_leg_head = s_leg_tail = 0; }
+
+void mc_hal_legacy_space(uint16_t *free_slots, uint16_t *total)
+{
+    int used = (s_leg_head - s_leg_tail + LEGACY_SLOTS) % LEGACY_SLOTS;
+    *total = LEGACY_SLOTS - 1;
+    *free_slots = (uint16_t)(LEGACY_SLOTS - 1 - used);
+}
 
 void mc_hal_log(const char *text)
 {

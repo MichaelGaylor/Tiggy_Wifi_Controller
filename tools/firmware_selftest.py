@@ -11,6 +11,7 @@ Runs against tools/firmware_sim.py (the firmware's own motion code on a PC):
 """
 
 import math
+import struct
 import sys
 import time
 
@@ -48,6 +49,9 @@ def main():
                              % (what, s["state"], s["alarm"], s["pos"][:3]))
 
     def idle():
+        if get()["state"] in (RUN, HOLD):               # a failed test left something playing: abort it
+            c.send(4)
+            c.pump(0.2)
         if get()["state"] in ("ESTOP", "ALARM"):
             sim(cmd="set", estop=0, limits=0, probe=0, probe_z=None)
             c.send(7)
@@ -112,6 +116,66 @@ def main():
         sim(cmd="resume")
         s = wait(lambda s: s["state"] == IDLE and not s["busy"], 5.0, "move to finish after resume")
         assert s["pos"][0] - p0[0] == -4000, "moved %d in total" % (s["pos"][0] - p0[0])
+
+    def stop_gaps():
+        """Times between the traced axis's last steps, in microseconds."""
+        t = sim(cmd="trace_read")["t"]
+        assert len(t) > 20, "no steps traced"
+        return [b - a for a, b in zip(t, t[1:])]
+
+    def cruise(steps_per_s=2000, moves=3):
+        """Speed-described moves of X at a steady speed, as an older host or G-code mode queues them."""
+        for n in range(moves):
+            legacy([2 * steps_per_s, 0, 0, 0, 0, 0], 0 if n == 0 else steps_per_s, steps_per_s if n < moves - 1 else 0,
+                   20000, duration_us=2000000)
+        wait(lambda s: s["state"] == RUN and s["feed"] > 0.95 * steps_per_s, 2.0, "cruise")
+        c.pump(0.2)
+
+    def t_feed_hold_slows_down():
+        # only a moment of such a move is ever in the step engine's queue: the stop must not end with it
+        idle()
+        sim(cmd="trace", axis=0)
+        cruise()
+        sim(cmd="hold")
+        wait(lambda s: s["state"] == HOLD and s["feed"] == 0, 1.0, "standstill after hold")
+        last = stop_gaps()[-1]
+        assert last >= 2500, "the axis stopped dead from %d steps/s on a feed hold" % (1e6 / last)
+        sim(cmd="resume")
+        wait(lambda s: s["state"] == IDLE and not s["busy"], 8.0, "moves to finish after resume")
+
+    def t_old_host_stop():
+        # a host older than protocol 1.2 stops by its reset packet (the Stop button of TiggyUGS)
+        p0 = idle()["pos"]
+        sim(cmd="trace", axis=0)
+        cruise()
+        c.send(7)
+        s = wait(lambda s: s["state"] == IDLE and not s["busy"], 2.0, "standstill after the reset")
+        moved = s["pos"][0] - p0[0]
+        assert 0 < moved < 12000, "moved %d of 12000 steps" % moved
+        last = stop_gaps()[-1]
+        assert last >= 2500, "the axis stopped dead from %d steps/s" % (1e6 / last)
+        c.pump(0.4)
+        assert get()["pos"][0] == s["pos"][0], "moved again after the stop: the queue was not dropped"
+        legacy([-moved, 0, 0, 0, 0, 0], 0, 0, 20000)        # and it takes motion again
+        s = wait(lambda s: s["state"] == IDLE and not s["busy"] and s["pos"][0] == p0[0], 8.0, "the way back")
+
+    def t_old_host_room():
+        # such a host paces itself by the room the status report shows, so that has to be the room in
+        # the queue its segments wait in
+        idle()
+        s0 = c.pump(0.2)
+        assert s0["buf_total"] > 100 and s0["buf_avail"] == s0["buf_total"], "idle: %d of %d free" % (
+            s0["buf_avail"], s0["buf_total"])
+        seg = struct.pack("<6iIIIIHBB", 200, 0, 0, 0, 0, 0, 500000, 0, 0, 20000 * 100, 0, 0, 0)   # 0.5 s each
+        for n in range(5):
+            c.send(1, struct.pack("<B3x", 8) + seg * 8)
+        s = c.pump(0.3)
+        used = s["buf_total"] - s["buf_avail"]
+        assert 36 <= used <= 40, "40 segments sent, the status shows %d waiting" % used
+        c.send(7)
+        s = wait(lambda s: s["state"] == IDLE and not s["busy"], 2.0, "standstill after the reset")
+        s = c.pump(0.3)
+        assert s["buf_avail"] == s["buf_total"], "queue not empty after the stop"
 
     def t_local_home():
         idle()
@@ -204,6 +268,9 @@ def main():
     test("speed-described move: honours its cruise speed", t_legacy_cruise_speed)
     test("speed-described moves join without stopping", t_legacy_chain)
     test("feed hold ramps to a stop and resumes exactly", t_feed_hold)
+    test("feed hold slows right down before it stops", t_feed_hold_slows_down)
+    test("older host: its reset stops the motion and drops the rest", t_old_host_stop)
+    test("older host: the status shows the room in its queue", t_old_host_room)
     test("homing started locally (G-code mode)", t_local_home)
     test("starved stream: holds, then plays out what it has, then continues", t_starved_stream)
     test("brief stall in a stream is ridden out", t_brief_stall)

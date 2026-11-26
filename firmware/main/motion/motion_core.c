@@ -229,6 +229,17 @@ static void apply_flush(uint8_t stream)
     stream_idle();
 }
 
+/* Slow to a stop, then drop what is queued and go on as `stream`.  A stream
+ * has to stop inside what it has queued.  Speed-described motion has only a
+ * moment of itself in the step engine and is fed on while it slows down
+ * (tick_legacy), so it takes the time the machine's acceleration asks for. */
+static void flush_decelerating(uint8_t stream)
+{
+    mc.pending_stream = stream;
+    mc.stream_flags |= WCNC_STREAM_FLUSHING;
+    se_ramp_stop(mc.owner == OWN_LEGACY ? stop_time_ms() : stop_time_within_queue_ms(), true);
+}
+
 static void on_flush(const uint8_t *payload, size_t len)
 {
     if (len < 2) return;
@@ -237,13 +248,8 @@ static void on_flush(const uint8_t *payload, size_t len)
     if (stream == mc.stream_id) return;                 /* a repeat of the flush already done */
 
     bool playing = (mc.owner == OWN_STREAM || mc.owner == OWN_LEGACY) && se_active();
-    if (mode == WCNC_FLUSH_DECELERATE && playing && !in_fault()) {
-        mc.pending_stream = stream;
-        mc.stream_flags |= WCNC_STREAM_FLUSHING;
-        se_ramp_stop(stop_time_within_queue_ms(), true);
-    } else {
-        apply_flush(stream);
-    }
+    if (mode == WCNC_FLUSH_DECELERATE && playing && !in_fault()) flush_decelerating(stream);
+    else apply_flush(stream);
 }
 
 static void on_motion(const uint8_t *payload, size_t len)
@@ -887,7 +893,13 @@ static void tick_legacy(void)
     legacy_t *l = &mc.leg;
     if (mc.cfg.io_module || in_fault() || mc.state == WCNC_STATE_JOG || mc.state == WCNC_STATE_HOMING) return;
     if (mc.owner != OWN_NONE && mc.owner != OWN_LEGACY) return;
-    if (mc.pending_stream >= 0) return;
+
+    /* While a stop is slowing the axes down - a hold, or a flush that will
+     * drop the rest - the path is fed on, so that they slow down along it
+     * instead of running off the end of the little that is queued. */
+    bool slowing = mc.owner == OWN_LEGACY && se_ramping();
+    bool flushing = mc.pending_stream >= 0;
+    if (flushing && !slowing) return;
 
     if (mc.owner == OWN_LEGACY && se_probe_tripped()) {
         /* Contact: drop the rest of the probing move, carry on with what follows. */
@@ -896,7 +908,7 @@ static void tick_legacy(void)
         mc.probe_latched = true;
         l->active = false;
     }
-    if (mc.state != WCNC_STATE_HOLD) {
+    if (mc.state != WCNC_STATE_HOLD || slowing) {
         while (se_queued_us() < LEGACY_LOOKAHEAD_US && se_free() > 0) {
             if (!l->active) {
                 wcnc_motion_segment_t seg;
@@ -915,7 +927,7 @@ static void tick_legacy(void)
             if (!legacy_emit()) break;
         }
     }
-    if (mc.owner != OWN_LEGACY) return;
+    if (mc.owner != OWN_LEGACY || flushing) return;
 
     if (se_count() > 0 && !se_active()) {
         drivers(true);
@@ -966,7 +978,18 @@ void mc_estop(void)
 
 bool mc_reset(void)
 {
-    if (!in_fault()) return true;
+    if (!in_fault()) {
+        /* A host older than protocol 1.2 has no other way of saying "stop,
+         * and forget the rest" (the Stop button of TiggyUGS sends this): its
+         * motion is brought to rest and what it had queued is dropped. */
+        if (mc.owner == OWN_LEGACY && mc.pending_stream < 0) {
+            if (se_active() && !se_paused()) flush_decelerating(mc.stream_id);
+            else apply_flush(mc.stream_id);
+        } else if (mc.owner == OWN_NONE) {
+            mc_hal_legacy_clear();
+        }
+        return true;
+    }
     if (mc_hal_estop_input()) return false;             /* not while the button is still in */
     mc.state = WCNC_STATE_IDLE;
     mc.alarm = WCNC_ALARM_NONE;
@@ -1152,6 +1175,18 @@ static void send_status(void)
     memcpy(r->position_steps, pos, sizeof(pos));
     r->buffer_available = se_free();
     r->buffer_total = SE_QUEUE_SIZE - 1;
+    {
+        /* A host older than protocol 1.2 paces itself by this pair, and what
+         * it sends waits in the queue of speed-described segments - only a
+         * moment of it is ever in the step engine's.  While that queue is
+         * the one in use, it is the one shown. */
+        uint16_t leg_free, leg_total;
+        mc_hal_legacy_space(&leg_free, &leg_total);
+        if (mc.owner == OWN_LEGACY || leg_free != leg_total) {
+            r->buffer_available = leg_free;
+            r->buffer_total = leg_total;
+        }
+    }
     r->state = (uint8_t)mc.state;
     r->alarm_code = mc.alarm;
     r->homing_state = mc.state == WCNC_STATE_HOMING ? mc.home.mask : 0;
