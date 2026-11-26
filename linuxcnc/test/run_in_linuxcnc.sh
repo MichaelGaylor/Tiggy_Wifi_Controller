@@ -41,14 +41,24 @@ run_plan() {    # name of the plan, folder of its configuration
     SIM_PID=$!
     sleep 2
     echo "=== LinuxCNC: $1 ==="
-    TIGGY_TEST_PLAN="$1" linuxcnc "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || true
+    # -r: without a terminal LinuxCNC would otherwise put its output in
+    # temporary files and delete them
+    local code=0
+    rm -f "$HOME/linuxcnc_debug.txt" "$HOME/linuxcnc_print.txt"
+    TIGGY_TEST_PLAN="$1" timeout 900 linuxcnc -r "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || code=$?
     kill "$SIM_PID" 2>/dev/null || true
     wait "$SIM_PID" 2>/dev/null || true
     SIM_PID=""
     if ! grep -q "^ALL PASSED ($1)" "$TIGGY_TEST_RESULT" 2>/dev/null; then
         STATUS=1
-        echo "--- LinuxCNC's output ---"
-        tail -n 60 "$WORK/linuxcnc_$1.log"
+        echo "--- LinuxCNC ended with status $code; its output: ---"
+        tail -n 70 "$WORK/linuxcnc_$1.log"
+        for f in "$HOME/linuxcnc_debug.txt" "$HOME/linuxcnc_print.txt"; do
+            if [ -s "$f" ]; then
+                echo "--- $f ---"
+                tail -n 25 "$f"
+            fi
+        done
     fi
 }
 
@@ -63,7 +73,7 @@ printf '%s\n' TiggySwitches 127.0.0.1 mm XYZ n \
     800 50 500 0 300 n b n n \
     800 50 500 -100 0 n h n y \
     5 5 n  o  n n  n n | python3 "$ROOT/linuxcnc/tiggy_setup.py" --dir "$WORK/switches" > /dev/null
-run_plan switches "$WORK/switches"
+[ $STATUS -eq 0 ] && run_plan switches "$WORK/switches"
 
 echo
 cat "$TIGGY_TEST_RESULT" 2>/dev/null || echo "LinuxCNC produced no results"

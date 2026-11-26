@@ -16,7 +16,7 @@ level=notice
 lines=40
 if [ $status -ne 0 ]; then
     level=error
-    lines=100
+    lines=160
 fi
 tail -n $lines "$log" | sed -e 's/%/%25/g' -e 's/\r//g' | split -l 20 - "$log.part."
 n=0
