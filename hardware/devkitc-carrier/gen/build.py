@@ -4,9 +4,10 @@ Generates the whole KiCad project from design.py and checks it with KiCad's own 
 
     python gen/build.py [--no-route | --keep-routing] [--tracklayer DIR]
 
-Steps: project library -> schematic -> electrical rule check -> netlist -> board with the parts
-placed -> autorouting (Tracklayer, https://github.com/MichaelGaylor/Tracklayer) -> copper pours ->
-design rule check with the schematic compared against the board.  Reports land in build/.
+Steps: project library -> schematic (one page per function, drawn by gen_sch.py) -> electrical
+rule check -> netlist, compared pin for pin with design.py -> board with the parts placed ->
+autorouting (Tracklayer, https://github.com/MichaelGaylor/Tracklayer) -> copper pours -> design
+rule check with the schematic compared against the board.  Reports land in build/.
 
 Needs KiCad 10 (kicad-cli and the Python that comes with it) and, for routing, Tracklayer with
 numpy.  Hand edits to the .kicad_sch / .kicad_pcb are overwritten: change design.py.
@@ -49,7 +50,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--no-route", action="store_true", help="stop at the placed, unrouted board")
     ap.add_argument("--keep-routing", action="store_true",
-                    help="use the routing of the last build again (refused if a pad or a net has changed)")
+                    help="use the routing of the last build again (refused if a pad has moved or the connections have changed)")
     ap.add_argument("--tracklayer", default=os.environ.get("TRACKLAYER", ""), help="Tracklayer's source directory, if it is not installed")
     ap.add_argument("--route-args", default="--engine grid --pitch 0.1 --no-fanout --layer-cost B.Cu=1.5",
                     help="options for Tracklayer (default: %(default)s - its grid engine routes this board in a few minutes)")
@@ -74,6 +75,7 @@ def main():
         sys.exit("see " + erc)
     net = os.path.join(build, "netlist.net")
     run([cli, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", net, sch])
+    print("    ", run([sys.executable, os.path.join(HERE, "check_nets.py"), net]).strip().splitlines()[-1])
     run([cli, "sch", "export", "pdf", "-o", os.path.join(PROJECT, name + "-schematic.pdf"), sch])
     run([cli, "sch", "export", "bom", "--fields", "Reference,Value,Footprint,${QUANTITY}", "--labels",
          "References,Value,Footprint,Quantity", "--group-by", "Value,Footprint", "--exclude-dnp",
@@ -93,7 +95,9 @@ def main():
         print("routing: kept from the last build")
     else:
         route(args, unrouted, routed, build)
-    print("    ", run([kipy, os.path.join(HERE, "finish_pcb.py"), routed, unrouted, pcb]).strip().splitlines()[-1])
+    for line in run([kipy, os.path.join(HERE, "finish_pcb.py"), routed, unrouted, pcb]).strip().splitlines():
+        if not line.startswith("Adding duplicate image handler"):   # (chatter from KiCad's Python)
+            print("    ", line)
 
     run([cli, "pcb", "export", "pdf", "--layers", "F.Fab,F.SilkS,Edge.Cuts", "--mode-single", "--black-and-white",
          "-o", os.path.join(PROJECT, name + "-assembly.pdf"), pcb])

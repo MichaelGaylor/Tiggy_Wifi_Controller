@@ -110,12 +110,34 @@ def _symbol(name, ref, footprint, descr, left, right, width):
     return "\n".join("  " + line for line in out)
 
 
+def _supply_symbol(name):
+    """A supply symbol like KiCad's own +5V, for a supply its library has no name for."""
+    f = '(effects (font (size 1.27 1.27)))'
+    h = '(effects (font (size 1.27 1.27)) (hide yes))'
+    line = '(stroke (width 0) (type default)) (fill (type none))'
+    out = ['(symbol "%s" (power) (pin_numbers (hide yes)) (pin_names (offset 0) (hide yes)) (exclude_from_sim no) (in_bom yes) (on_board yes)' % name,
+           '  (property "Reference" "#PWR" (at 0 -3.81 0) %s)' % h,
+           '  (property "Value" "%s" (at 0 3.556 0) %s)' % (name, f),
+           '  (property "Footprint" "" (at 0 0 0) %s)' % h,
+           '  (property "Datasheet" "" (at 0 0 0) %s)' % h,
+           '  (property "Description" "Supply symbol: joins everything on the net %s" (at 0 0 0) %s)' % (name, h),
+           '  (symbol "%s_0_1"' % name,
+           '    (polyline (pts (xy -0.762 1.27) (xy 0 2.54)) %s)' % line,
+           '    (polyline (pts (xy 0 2.54) (xy 0.762 1.27)) %s)' % line,
+           '    (polyline (pts (xy 0 0) (xy 0 2.54)) %s))' % line,
+           '  (symbol "%s_1_1"' % name,
+           '    (pin power_in line (at 0 0 90) (length 0) (name "" %s) (number "1" %s)))' % (f, f),
+           ')']
+    return "\n".join("  " + line for line in out)
+
+
 def symbol_library():
     j1 = [(i + 1, n) for i, n in enumerate(design.DEVKIT_J1)]
     j3 = [(i + 23, n) for i, n in enumerate(design.DEVKIT_J3)]
     es_l = list(zip(range(1, 7), ["GND", "GND", "MOSI", "SCLK", "SCSn", "INTn"]))
     es_r = list(zip(range(7, 13), ["GND", "3V3", "3V3", "NC", "RSTn", "MISO"]))
-    return "(kicad_symbol_lib (version 20231120) (generator tiggy_gen)\n%s\n%s\n)\n" % (
+    return "(kicad_symbol_lib (version 20231120) (generator tiggy_gen)\n%s\n%s\n%s\n)\n" % (
+        _supply_symbol("VIN"),
         _symbol("ESP32-S3-DevKitC-1", "A", "tiggy:ESP32-S3-DevKitC-1_Socket",
                 "Espressif ESP32-S3-DevKitC-1 on sockets: pins 1-22 header J1, 23-44 header J3, from the aerial end",
                 j1, j3, 20.32),

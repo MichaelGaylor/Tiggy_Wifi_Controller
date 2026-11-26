@@ -4,3 +4,4 @@ build/
 fp-info-cache
 __pycache__/
 *.lck
+.history/

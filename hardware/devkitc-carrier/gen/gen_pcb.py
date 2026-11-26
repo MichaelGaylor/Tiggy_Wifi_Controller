@@ -39,8 +39,10 @@ def read_netlist(path):
         root = parse(f.read())
     comps = {}
     for c in find(first(root, "components"), "comp"):
+        # where its symbol is: the page (nothing for the first one), then the symbol itself
+        page = str(first(first(c, "sheetpath"), "tstamps")[1])
         comps[str(first(c, "ref")[1])] = dict(value=str(first(c, "value")[1]), footprint=str(first(c, "footprint")[1]),
-                                              tstamp=str(first(c, "tstamps")[1]))
+                                              path=page + str(first(c, "tstamps")[1]))
     pin_net = {}
     for n in find(first(root, "nets"), "net"):
         name = str(first(n, "name")[1])
@@ -103,7 +105,7 @@ def main(netlist, out):
         fp.SetFPID(pcbnew.LIB_ID(lib, name))
         fp.SetReference(ref)
         fp.SetValue(comp["value"])
-        fp.SetPath(pcbnew.KIID_PATH("/" + comp["tstamp"]))
+        fp.SetPath(pcbnew.KIID_PATH(comp["path"]))
         x, y, rot = part["pcb"]
         fp.SetPosition(pt(x, y))
         fp.SetOrientationDegrees(rot)
@@ -146,7 +148,7 @@ def main(netlist, out):
     # surface-mounted 0 V pad its own via to it; finish_pcb.py then pours the front as well.)
     w, h = design.BOARD_W, design.BOARD_H
     z = zone(board, [(0.4, 0.4), (w - 0.4, 0.4), (w - 0.4, h - 0.4), (0.4, h - 0.4)], [pcbnew.B_Cu])
-    z.SetNet(nets["/GND"])
+    z.SetNet(nets["GND"])
     z.SetZoneName("0V")
     z.SetLocalClearance(mm(0.3))
     z.SetMinThickness(mm(0.25))

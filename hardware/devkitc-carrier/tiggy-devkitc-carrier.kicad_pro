@@ -125,47 +125,91 @@
     "netclass_patterns": [
       {
         "netclass": "Power",
-        "pattern": "/+5V"
+        "pattern": "+5V"
       },
       {
         "netclass": "Power",
-        "pattern": "/+3V3"
+        "pattern": "/*/+5V"
       },
       {
         "netclass": "Power",
-        "pattern": "/VIN"
+        "pattern": "+3V3"
       },
       {
         "netclass": "Power",
-        "pattern": "/VIN_IN"
+        "pattern": "/*/+3V3"
       },
       {
         "netclass": "Power",
-        "pattern": "/VIN_F"
+        "pattern": "VIN"
       },
       {
         "netclass": "Power",
-        "pattern": "/5V_ESP"
+        "pattern": "/*/VIN"
       },
       {
         "netclass": "Power",
-        "pattern": "/GND"
+        "pattern": "VIN_IN"
       },
       {
         "netclass": "Power",
-        "pattern": "/RLY?_K"
+        "pattern": "/*/VIN_IN"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "VIN_F"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/*/VIN_F"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "5V_ESP"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/*/5V_ESP"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "GND"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/*/GND"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "RLY?_K"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/*/RLY?_K"
       },
       {
         "netclass": "Relay",
-        "pattern": "/RLY?_COM"
+        "pattern": "RLY?_COM"
       },
       {
         "netclass": "Relay",
-        "pattern": "/RLY?_NO"
+        "pattern": "/*/RLY?_COM"
       },
       {
         "netclass": "Relay",
-        "pattern": "/RLY?_NC"
+        "pattern": "RLY?_NO"
+      },
+      {
+        "netclass": "Relay",
+        "pattern": "/*/RLY?_NO"
+      },
+      {
+        "netclass": "Relay",
+        "pattern": "RLY?_NC"
+      },
+      {
+        "netclass": "Relay",
+        "pattern": "/*/RLY?_NC"
       }
     ]
   },
@@ -174,6 +218,13 @@
     "page_layout_descr_file": ""
   },
   "schematic": {
+    "drawing": {
+      "intersheets_ref_own_page": false,
+      "intersheets_ref_prefix": "page ",
+      "intersheets_ref_short": false,
+      "intersheets_ref_show": true,
+      "intersheets_ref_suffix": ""
+    },
     "legacy_lib_dir": "",
     "legacy_lib_list": []
   },
@@ -181,6 +232,34 @@
     [
       "89bf425d-c224-58f0-ab76-f03393246ef6",
       "Root"
+    ],
+    [
+      "7156df1c-bbcc-53d8-aaaa-68e73372c608",
+      "Supply"
+    ],
+    [
+      "4d3b3627-794e-5d53-88d8-ce6e422c4ee8",
+      "Drives"
+    ],
+    [
+      "86e31b6e-480c-5c0e-b9b2-cc5a82554e65",
+      "Inputs"
+    ],
+    [
+      "56dd9b80-d2e5-5c03-8d0f-fb81ffa9b4ec",
+      "Spindle sensor"
+    ],
+    [
+      "321dd13f-c382-5229-a291-63ea17bb2c15",
+      "Relays"
+    ],
+    [
+      "41a5ddcc-662a-5242-970c-4ee0f322b616",
+      "Spindle speed"
+    ],
+    [
+      "35d4c741-1696-5f74-aba4-37ca1a5026a6",
+      "Ethernet"
     ]
   ],
   "text_variables": {}

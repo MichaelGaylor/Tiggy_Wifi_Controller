@@ -16,8 +16,9 @@ def build():
             "pcb_color": "rgba(0, 0, 0, 0.000)", "priority": -1 if name == "Default" else len(classes) - 1,
             "schematic_color": "rgba(0, 0, 0, 0.000)", "track_width": width, "tuning_profile": "",
             "via_diameter": via, "via_drill": drill, "wire_width": 6})
-        # nets named by labels on the top sheet carry a leading slash
-        patterns += [{"netclass": name, "pattern": "/" + n} for n in nets]
+        # a supply's name stands alone; a net named on one page carries that page's name in front
+        for n in nets:
+            patterns += [{"netclass": name, "pattern": n}, {"netclass": name, "pattern": "/*/" + n}]
     return {
         "board": {"3dviewports": [], "design_settings": {
             "defaults": {"zones": {"min_clearance": 0.3}},
@@ -36,8 +37,13 @@ def build():
         "net_settings": {"classes": classes, "meta": {"version": 5}, "net_colors": None, "netclass_assignments": None,
                          "netclass_patterns": patterns},
         "pcbnew": {"last_paths": {}, "page_layout_descr_file": ""},
-        "schematic": {"legacy_lib_dir": "", "legacy_lib_list": []},
-        "sheets": [[str(gen_sch.uid("root")), "Root"]],
+        # beside each name that leaves a page: the pages it is also on
+        "schematic": {"drawing": {"intersheets_ref_own_page": False, "intersheets_ref_prefix": "page ",
+                                  "intersheets_ref_short": False, "intersheets_ref_show": True,
+                                  "intersheets_ref_suffix": ""},
+                      "legacy_lib_dir": "", "legacy_lib_list": []},
+        "sheets": [[str(gen_sch.ROOT), "Root"]] + [[str(gen_sch.sheet_uuid(key)), title]
+                                                   for key, title, *_ in gen_sch.PAGES[1:]],
         "text_variables": {},
     }
 
