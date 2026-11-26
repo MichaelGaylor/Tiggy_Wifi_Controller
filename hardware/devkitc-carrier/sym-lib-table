@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "tiggy")(type "KiCad")(uri "${KIPRJMOD}/tiggy.kicad_sym")(options "")(descr "Tiggy carrier board parts"))
+)
