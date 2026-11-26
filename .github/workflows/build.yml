@@ -76,7 +76,12 @@ jobs:
   test-linuxcnc-driver:
     name: Test the LinuxCNC driver
     runs-on: ubuntu-latest
-    container: debian:trixie        # Debian 13 has LinuxCNC 2.9 as a package; Ubuntu does not
+    container:
+      image: debian:trixie          # Debian 13 has LinuxCNC 2.9 as a package; Ubuntu does not
+      # LinuxCNC's realtime helper runs as root and expects root's full rights
+      # (to share memory with the user's programs, lock memory, set priorities),
+      # which an ordinary container withholds.
+      options: --privileged
     steps:
       - name: Install LinuxCNC and the build tools
         run: |

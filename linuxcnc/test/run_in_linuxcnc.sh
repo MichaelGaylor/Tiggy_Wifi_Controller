@@ -35,8 +35,8 @@ STATUS=0
 run_plan() {    # name of the plan, folder of its configuration
     local ini
     ini="$(ls "$2"/*.ini)"
-    # No screen: the test session takes its place, and no tool-change prompt
-    sed -i "s|^DISPLAY = axis|DISPLAY = $HERE/linuxcnc_session.py|" "$ini"
+    # No screen: the test session takes its place, and there is no start-up picture
+    sed -i -e "s|^DISPLAY = axis|DISPLAY = $HERE/linuxcnc_session.py|" -e "/^INTRO_/d" "$ini"
     python3 "$ROOT/tools/firmware_sim.py" --bind 127.0.0.1 --quiet &
     SIM_PID=$!
     sleep 2

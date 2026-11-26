@@ -267,7 +267,7 @@ void mc_hal_identity(uint8_t *caps, uint8_t mac[6], char name[WCNC_DEVICE_NAME_L
     static const uint8_t fake[6] = { 0x02, 0x00, 'F', 'W', 'S', 1 };
     *caps = capabilities();
     memcpy(mac, fake, 6);
-    strncpy(name, device_name(), WCNC_DEVICE_NAME_LEN - 1);
+    snprintf(name, WCNC_DEVICE_NAME_LEN, "%s", device_name());
 }
 
 /* Old-form segments: a small queue standing in for the firmware's planner buffer */
@@ -387,7 +387,7 @@ EXPORT int fws_tcp(const uint8_t *data, int len, uint8_t *resp, int resp_size)
         r.capabilities = capabilities();
         r.buffer_capacity = SE_QUEUE_SIZE - 1;
         r.max_step_rate = mc_max_step_rate();
-        strncpy(r.device_name, device_name(), sizeof(r.device_name) - 1);
+        snprintf(r.device_name, sizeof(r.device_name), "%s", device_name());
         r.device_mode = m.io_module ? 1 : 0;
         r.encoder_ppr_hi = (uint8_t)(m.encoder_ppr >> 8);
         r.encoder_ppr_lo = (uint8_t)m.encoder_ppr;
@@ -446,7 +446,8 @@ EXPORT int fws_tcp(const uint8_t *data, int len, uint8_t *resp, int resp_size)
                 mc_config_changed();
             }
         }
-        /* fall through: acknowledged like a save */
+        /* ...and is acknowledged like a save */
+        /* fall through */
     case WCNC_PKT_CONFIG_SAVE: {
         wcnc_ack_packet_t a;
         memset(&a, 0, sizeof(a));
