@@ -74,10 +74,29 @@ later. In practice:
   `pos-lim-sw-in`). The machine is still leaving the switch when LinuxCNC has
   finished homing, and LinuxCNC would report a limit at that moment. The
   controller's own stop guards the limit instead.
-- Spindle-synchronised motion (G33, G76 threading, rigid tapping) is not
-  supported by this driver yet.  (The controller can cut threads in step with
-  its spindle - the Mach3 plugin uses that - but LinuxCNC synchronises to the
-  spindle itself, which a buffered connection cannot serve.)
+- **Screw cutting (G33, G76)** works with a spindle sensor on the controller:
+  an encoder, with or without an index pulse, or a single sensor giving one
+  pulse per revolution (set the terminal layout and the kind of sensor on the
+  controller first; answer yes to the wizard's question about it).  LinuxCNC
+  follows the spindle's position, but the motors are a fifth of a second
+  behind LinuxCNC, so the real spindle will not do for that.  The driver
+  shows LinuxCNC a smooth copy of the spindle instead (`tiggy.spindle-revs`),
+  and sends on what LinuxCNC then commands marked to be played by the
+  spindle's angle; the controller, which has the real spindle, begins each
+  pass as it passes its index and keeps the axes in place on the thread
+  whatever the speed does under the cut.  What this means in practice:
+  - Every pass begins at the same place on the work, as LinuxCNC's own
+    encoder handling would have it.  As always with LinuxCNC, begin the pass
+    clear of the work: the axis needs a moment to reach the spindle's speed.
+  - From the start of a pass until the machine next stands still, everything
+    is played by the spindle - the way out and back as well.  If LinuxCNC
+    switches the spindle off straight after, it is kept running for the
+    quarter second until that motion has been played.
+  - If a pass cannot be kept in step (the PC or the network stalls in the
+    middle of it), the controller stops and abandons it rather than cut
+    across the thread, and LinuxCNC is stopped with the reason.
+  - Rigid tapping (G33.1) is not supported: the controller does not follow
+    a spindle that reverses.
 
 **If the computer or the network hesitates** the queue covers it. If it
 hesitates for longer than the queue, the controller slows the machine to a
@@ -120,6 +139,8 @@ Loaded with `loadrt tiggy ip=<address or auto> joints=<1-6> [io_ip=<address or a
 | `tiggy.spindle-forward`, `-reverse` | bit in | spindle |
 | `tiggy.spindle-speed` | float in | spindle speed, rpm |
 | `tiggy.spindle-speed-fb`, `-fb-rpm` | float out | spindle encoder, rev/s and rpm |
+| `tiggy.spindle-revs` | float out | for `spindle.0.revs`: the copy of the spindle LinuxCNC follows in G33 and G76 |
+| `tiggy.spindle-index-enable` | bit io | for `spindle.0.index-enable` |
 | `tiggy.coolant-flood`, `-mist` | bit in | coolant |
 | `tiggy.buffer-ms` | float out | motion queued at this moment |
 | `tiggy.underruns` | u32 out | times the queue ran short |

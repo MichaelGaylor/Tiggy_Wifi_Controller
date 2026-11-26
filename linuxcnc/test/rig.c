@@ -123,12 +123,75 @@ static void plan(axis_t *a, double dt)
     a->pos += a->vel * dt;
 }
 
+/* A move in step with the spindle, the way LinuxCNC's motion controller makes
+ * one (G33): ask for the index, and when the encoder has answered, bring the
+ * joint up to the spindle's speed and from then on keep it at a fixed place
+ * for every position of the spindle. */
+enum { TH_NONE = 0, TH_ASK, TH_WAIT, TH_CATCH_UP, TH_LOCKED };
+static struct {
+    volatile int state;
+    int    joint;
+    double pitch, turns, amax;      /* units per revolution, revolutions to cut, units/s^2 */
+    double origin, offset, revs_before;
+} s_th;
+
+static void thread_period(double dt)
+{
+    axis_t *a = &s_axis[s_th.joint];
+    double revs = 0.0, enable = 1.0;
+
+    if (s_th.state == TH_ASK) {
+        shim_set("tiggy.spindle-index-enable", 1.0);
+        s_th.state = TH_WAIT;
+        return;
+    }
+    shim_get("tiggy.spindle-revs", &revs);
+    if (s_th.state == TH_WAIT) {
+        shim_get("tiggy.spindle-index-enable", &enable);
+        if (enable != 0.0) return;                      /* the index has not come yet */
+        s_th.origin = a->pos;
+        s_th.revs_before = revs;
+        s_th.state = TH_CATCH_UP;
+        return;
+    }
+    double want = s_th.origin + s_th.pitch * revs;      /* where the thread says the joint belongs */
+    double want_vel = s_th.pitch * (revs - s_th.revs_before) / dt;
+    s_th.revs_before = revs;
+    if (s_th.state == TH_CATCH_UP) {
+        double dv = s_th.amax * dt;
+        if (fabs(want_vel - a->vel) <= dv) {
+            /* As fast as the spindle asks: from here the joint keeps the
+             * place it has reached against the spindle. */
+            a->vel = want_vel;
+            a->pos += a->vel * dt;
+            s_th.offset = a->pos - want;
+            s_th.state = TH_LOCKED;
+        } else {
+            a->vel += want_vel > a->vel ? dv : -dv;
+            a->pos += a->vel * dt;
+        }
+    } else {
+        a->pos = want + s_th.offset;
+        a->vel = want_vel;
+    }
+    a->target = a->pos;
+    if (fabs(revs) >= s_th.turns) {
+        /* End of the thread: an ordinary stop from here. */
+        a->target = a->pos + a->vel * fabs(a->vel) / (2.0 * s_th.amax);
+        a->vmax = fabs(a->vel) + 1.0;
+        a->amax = s_th.amax;
+        s_th.state = TH_NONE;
+    }
+}
+
 static void servo_period(void)
 {
     long told = s_told_ns;
     double dt = (double)told * 1e-9;
 
     s_read(s_read_arg, told);
+
+    if (s_machine_on && s_th.state != TH_NONE) thread_period(dt);
 
     for (int j = 0; j < s_joints; j++) {
         axis_t *a = &s_axis[j];
@@ -139,7 +202,7 @@ static void servo_period(void)
             a->pos = a->target = fb;
             a->vel = 0.0;
         } else {
-            if (a->amax > 0.0) plan(a, dt);
+            if (a->amax > 0.0 && !(s_th.state >= TH_CATCH_UP && j == s_th.joint)) plan(a, dt);
             double e = fabs(a->pos - fb);
             if (e > s_worst_error[j]) s_worst_error[j] = e;
         }
@@ -210,6 +273,7 @@ EXPORT int rig_start(const char *ip, int joints, const char *io_ip, int servo_de
     }
     s_machine_on = 0;
     s_stall_ms = 0;
+    s_th.state = TH_NONE;
     s_run = 1;
 #ifdef _WIN32
     s_thread = (HANDLE)_beginthreadex(NULL, 0, servo_entry, NULL, 0, NULL);
@@ -273,9 +337,29 @@ EXPORT double rig_command(int joint)
     return (joint >= 0 && joint < AXES) ? s_axis[joint].pos : 0.0;
 }
 
+/* Cut `turns` revolutions of a thread of the given pitch (units per
+ * revolution, signed) with a joint, beginning at the spindle's index. */
+EXPORT void rig_thread(int joint, double pitch, double turns, double amax)
+{
+    if (joint < 0 || joint >= AXES || s_th.state != TH_NONE) return;
+    s_th.joint = joint;
+    s_th.pitch = pitch;
+    s_th.turns = turns;
+    s_th.amax = amax;
+    s_th.offset = 0.0;
+    s_th.state = TH_ASK;
+}
+
+/* 0: no thread being cut; otherwise what stage it is at. */
+EXPORT int rig_threading(void)
+{
+    return s_th.state;
+}
+
 /* True while any joint has not reached its target. */
 EXPORT int rig_moving(void)
 {
+    if (s_th.state != TH_NONE) return 1;
     for (int j = 0; j < s_joints; j++)
         if (s_axis[j].pos != s_axis[j].target || s_axis[j].vel != 0.0) return 1;
     return 0;

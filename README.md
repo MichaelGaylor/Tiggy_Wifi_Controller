@@ -102,6 +102,8 @@ The spindle sensor is either an **encoder with A and B channels**, with or witho
 
 A threading pass is played in step with the spindle or not at all. If something breaks into one - a feed hold or stop from the host in the middle of it, the host leaving the controller without motion, a spindle the axes cannot keep up with - the controller brings the axes to rest, drops what was left and says so (`WCNC_STREAM_SYNC_LOST`), rather than carry on out of step with the thread already cut.
 
+Screw cutting is available to both hosts: G32 and G76 in Mach3 Turn through the plugin, G33 and G76 in LinuxCNC through its driver (`linuxcnc/README.md`).
+
 For screw cutting the host streams the threading pass like any other move, marked to be played *by the spindle* and to begin at its index (`WCNC_SEG_FLAG_SPINDLE_SYNC`, `WCNC_SEG_FLAG_INDEX_START` in `protocol/wifi_cnc_protocol.h`). The controller then advances through the move by the angle the spindle really turns, so the pitch does not depend on the spindle holding its speed, a spindle that stalls stops the axes with it, and every pass begins at the same place on the work. The Mach3 plugin does this for G32 and G76 in Mach3 Turn; the LinuxCNC driver does not use it yet.
 
 ### A carrier board for this layout

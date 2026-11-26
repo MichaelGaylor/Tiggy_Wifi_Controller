@@ -326,11 +326,65 @@ class Session:
         self.healthy("homing again")
 
     # ---- runner
+    def step_threading(self):
+        # Three G33 passes of 8 turns, pitch 2 mm.  In the second the spindle slows by 15 % as if
+        # under the cut.  The simulator records every step of Z with the spindle's angle at it.
+        sim = self.sim
+        sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0, ripple=0.0, ripple_hz=0.0)
+        self.mdi("M3 S300")
+        self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 8, "the spindle to reach 300 rpm")
+        time.sleep(1.5)
+        pitch, depth = 2.0, 16.0
+        per_rev = pitch * self.scale[2] * (-1.0)        # Z goes negative: steps per revolution, signed
+        z0 = round(self.poll().position[2], 4)
+        sim.cmd(cmd="trace", axis=2)
+        for n, slow in enumerate((None, 255.0, None)):
+            if slow:
+                sim.cmd(cmd="spindle", follow=0, rpm=slow, accel=60.0)      # sags through the pass
+            self.mdi("G33 Z%g K%g" % (z0 - depth, pitch), timeout=90)
+            sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0)
+            self.mdi("G0 Z%g" % z0)
+            self.check_position("after pass %d" % (n + 1))
+            self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 8, "the spindle to recover")
+            time.sleep(1.2)
+        self.mdi("M5")
+        tr = sim.cmd(cmd="trace_read")
+        turns_at, pos = tr["turns"], tr["pos"]
+        cut = 1 if per_rev > 0 else -1
+        length = abs(per_rev) * depth / pitch
+        runs, first = [], None
+        for i in range(1, len(pos)):
+            cutting = (pos[i] - pos[i - 1]) * cut > 0
+            if cutting and first is None:
+                first = i
+            elif not cutting and first is not None:
+                if i - first > 0.5 * length:
+                    runs.append((first, i))
+                first = None
+        if first is not None and len(pos) - first > 0.5 * length:
+            runs.append((first, len(pos)))
+        check(len(runs) == 3, "expected three passes in the record of Z's steps, found %d" % len(runs))
+        places = []
+        for n, (a, b) in enumerate(runs):
+            lo, hi = a + (b - a) // 4, a + (b - a) * 9 // 10
+            res = [pos[i] - per_rev * turns_at[i] for i in range(lo, hi)]
+            spread = max(res) - min(res)
+            self.lines.append("      pass %d: %d steps, Z within %.2f steps of its place on the spindle" % (n + 1, b - a, spread))
+            check(spread <= 3.0, "pass %d: Z wanders %.1f steps against the spindle's angle" % (n + 1, spread))
+            places.append((sum(res) / len(res)) % abs(per_rev))
+        for n in (1, 2):
+            d = (places[n] - places[0] + abs(per_rev) / 2.0) % abs(per_rev) - abs(per_rev) / 2.0
+            self.lines.append("      pass %d begins %.2f steps from pass 1" % (n + 1, d))
+            check(abs(d) <= 0.02 * abs(per_rev), "pass %d begins %.1f steps (%.1f degrees) from pass 1: the threads "
+                  "do not line up" % (n + 1, d, d / abs(per_rev) * 360.0))
+        self.healthy("screw cutting")
+
     def run(self):
         plans = {
             "basic": [self.step_ready, self.step_on_and_home, self.step_mdi, self.step_program,
                       self.step_jog_and_abort, self.step_probe, self.step_estop],
             "switches": [self.step_ready, self.step_home_on_switches, self.step_mdi],
+            "threading": [self.step_ready, self.step_on_and_home, self.step_threading],
         }
         for fn in plans[PLAN]:
             name = fn.__name__[5:]

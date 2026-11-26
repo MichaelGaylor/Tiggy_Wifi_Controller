@@ -139,6 +139,7 @@ class Rig:
         lib.rig_worst_error.restype = ctypes.c_double
         lib.rig_cycles.restype = ctypes.c_double
         lib.rig_messages.argtypes = [ctypes.c_char_p, ctypes.c_int]
+        lib.rig_thread.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double]
         self.lib = lib
         self.running = False
         self.log = []
@@ -745,6 +746,70 @@ class Tests:
             self.no_trouble()
         self.tear_down()
 
+    def test_threading(self):
+        """Screw cutting: moves in step with the spindle are cut by the real spindle's angle, pass after pass"""
+        self.bring_up(sim_extra=("--encoder", "1024"))
+        r, sim = self.rig, self.sim
+        sim.set(lim_hi=[2.0e6] * 6, lim_lo=[-2.0e6] * 6)
+        self.machine_on()
+        check(r.get("tiggy.spindle-revs") == r.get("tiggy.spindle-revs"), "the driver has no pin tiggy.spindle-revs")
+        r.set("tiggy.spindle-speed", 300.0)
+        r.set("tiggy.spindle-forward", 1)
+        sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0, ripple=0.0, ripple_hz=0.0)
+        wait_for(lambda: abs(r.get("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 5, "the spindle to reach 300 rpm")
+        time.sleep(1.2)                                 # the driver's copy of the spindle settles
+        pitch, turns = 2.0, 8.0                         # mm per revolution; revolutions to a pass
+        per_rev = pitch * SCALE[2]                      # steps per revolution, signed
+        start = r.command(2)
+        sim.cmd(cmd="trace", axis=2)
+        # three passes; in the second the cut slows the spindle by 15 %
+        for n, droop in enumerate((None, 255.0, None)):
+            r.lib.rig_thread(2, pitch, turns, MAXACC[2])
+            wait_for(lambda: r.lib.rig_threading() >= 3 or not r.lib.rig_threading(), 5, "LinuxCNC to be given the index")
+            if droop:
+                time.sleep(0.5)
+                sim.cmd(cmd="spindle", follow=0, rpm=droop, accel=400.0)
+            self.settle()
+            sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0)
+            r.move(2, start)                            # back for the next pass
+            self.settle()
+            self.check_position("after pass %d: " % (n + 1))
+            wait_for(lambda: abs(r.get("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 5, "the spindle to recover")
+            time.sleep(1.0)
+        self.no_trouble()
+
+        tr = sim.cmd(cmd="trace_read")
+        turns_at, pos = tr["turns"], tr["pos"]
+        # the passes: runs of steps in the cutting direction (the way back goes the other way)
+        cut = 1 if per_rev > 0 else -1
+        runs, first = [], None
+        for i in range(1, len(pos)):
+            cutting = (pos[i] - pos[i - 1]) * cut > 0
+            if cutting and first is None:
+                first = i
+            elif not cutting and first is not None:
+                if i - first > 0.5 * abs(per_rev) * turns:
+                    runs.append((first, i))
+                first = None
+        if first is not None and len(pos) - first > 0.5 * abs(per_rev) * turns:
+            runs.append((first, len(pos)))
+        check(len(runs) == 3, "expected three passes in the record of Z's steps, found %d" % len(runs))
+        places = []
+        for n, (a, b) in enumerate(runs):
+            lo, hi = a + (b - a) // 4, a + (b - a) * 9 // 10   # in step: after the start, before the end
+            res = [pos[i] - per_rev * turns_at[i] for i in range(lo, hi)]
+            spread = max(res) - min(res)
+            if self.args.verbose:
+                print("        pass %d: %d steps, pitch error at most %.2f steps" % (n + 1, b - a, spread))
+            check(spread <= 3.0, "pass %d: Z wanders %.1f steps against the spindle's angle (the pitch is not kept)"
+                  % (n + 1, spread))
+            places.append((sum(res) / len(res)) % abs(per_rev))
+        for n in (1, 2):
+            d = (places[n] - places[0] + abs(per_rev) / 2.0) % abs(per_rev) - abs(per_rev) / 2.0
+            check(abs(d) <= 3.0, "pass %d begins %.1f steps (%.1f degrees of the spindle) away from pass 1: "
+                  "the threads do not line up" % (n + 1, d, d / abs(per_rev) * 360.0))
+        self.tear_down()
+
     def test_jump(self):
         """A commanded position that jumps is refused, not followed"""
         self.bring_up()
@@ -819,7 +884,8 @@ class Tests:
     def run(self):
         names = [n for n in ("test_settings", "test_startup", "test_moves", "test_restart_within_buffer", "test_loss", "test_stall",
                              "test_machine_off", "test_estop_input", "test_limit_switch", "test_outputs_inputs",
-                             "test_link_loss", "test_jump", "test_search", "test_io_module", "test_clocks")
+                             "test_link_loss", "test_jump", "test_search", "test_io_module", "test_clocks",
+                             "test_threading")
                  if not self.args.k or self.args.k in n]
         failed = 0
         for name in names:

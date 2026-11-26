@@ -32,12 +32,12 @@ chmod +x "$HERE/linuxcnc_session.py"
 export TIGGY_TEST_RESULT="$WORK/result.txt"
 STATUS=0
 
-run_plan() {    # name of the plan, folder of its configuration
+run_plan() {    # name of the plan, folder of its configuration, [options for the simulator]
     local ini
     ini="$(ls "$2"/*.ini)"
     # No screen: the test session takes its place, and there is no start-up picture
     sed -i -e "s|^DISPLAY = axis|DISPLAY = $HERE/linuxcnc_session.py|" -e "/^INTRO_/d" "$ini"
-    python3 "$ROOT/tools/firmware_sim.py" --bind 127.0.0.1 --quiet &
+    python3 "$ROOT/tools/firmware_sim.py" --bind 127.0.0.1 --quiet $3 &
     SIM_PID=$!
     sleep 2
     echo "=== LinuxCNC: $1 ==="
@@ -72,8 +72,13 @@ printf '%s\n' TiggySwitches 127.0.0.1 mm XYZ n \
     800 50 500 0 300 n b n n \
     800 50 500 0 300 n b n n \
     800 50 500 -100 0 n h n y \
-    5 5 n  o  n n  n n | python3 "$ROOT/linuxcnc/tiggy_setup.py" --dir "$WORK/switches" > /dev/null
+    5 5 n  o n  n n  n n | python3 "$ROOT/linuxcnc/tiggy_setup.py" --dir "$WORK/switches" > /dev/null
 [ $STATUS -eq 0 ] && run_plan switches "$WORK/switches"
+
+# Screw cutting: a spindle with an encoder on the controller, G33 in LinuxCNC
+python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --spindle-sensor --name TiggyThread --address 127.0.0.1 \
+    --no-toolchange-prompt --dir "$WORK/threading" > /dev/null
+[ $STATUS -eq 0 ] && run_plan threading "$WORK/threading" "--encoder 1024"
 
 echo
 cat "$TIGGY_TEST_RESULT" 2>/dev/null || echo "LinuxCNC produced no results"

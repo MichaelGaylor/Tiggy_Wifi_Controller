@@ -116,6 +116,20 @@ RTAPI_MP_STRING(io_ip, "address of an I/O expansion module (auto to find it), em
 #define SETTLE_STEPS        4           /* standing still, LinuxCNC and the controller may differ by this
                                            much (it is then put right); more is a fault */
 
+/* Screw cutting.  LinuxCNC moves the axes by the position of the spindle it
+ * is shown.  The motors are a fifth of a second behind LinuxCNC, so the real
+ * spindle will not do: LinuxCNC is shown a smooth copy of it instead, and
+ * what it then commands is sent on marked "play this by the spindle", with
+ * the angle of that copy each piece of it belongs to.  The controller, which
+ * has the real spindle, puts the two together again. */
+#define SPINDLE_FILTER_S    0.25        /* smoothing of the measured speed for the copy */
+#define SYNC_MIN_RPM        10.0        /* slower than this the spindle counts as standing */
+#define SYNC_TRIM_GAIN      1.0         /* copy slowed by this share per second of motion queued too much */
+#define SYNC_TRIM_SLOWER    0.30        /* ...at most this much slower */
+#define SYNC_TRIM_FASTER    0.05        /* ...or faster than the real spindle */
+#define SYNC_LEAVE          0.2         /* copy slower than this share of the speed a move was begun at:
+                                           what follows is played by the clock again */
+
 #define STATUS_INTERVAL_MS  10u         /* how often the controller is asked to report */
 #define IO_PERIOD_MS        100u        /* output state heartbeat; the controller's watchdog is 1000 ms */
 #define COMMAND_REPEAT_MS   100u
@@ -175,6 +189,8 @@ typedef struct {                        /* what the controller reports: written 
     int64_t  position[MAX_JOINTS];      /* steps, counted the way LinuxCNC counts them */
     uint32_t underruns, resent, corrections, buffer_ms;
     uint32_t beat;                      /* changes with every report: the link thread is alive */
+    uint8_t  can_sync;                  /* the controller can play motion in step with its spindle */
+    float    spindle_trim;              /* correction to the copy of the spindle LinuxCNC is shown */
 } tg_actual_t;
 
 typedef struct {                        /* written by the I/O module's link thread */
@@ -186,6 +202,9 @@ typedef struct {                        /* one servo period of commanded positio
     int64_t  target[MAX_JOINTS];        /* 1/256 step */
     uint32_t ns;
     uint32_t epoch;
+    double   revs;                      /* the spindle LinuxCNC was shown this period (tiggy.spindle-revs) */
+    float    rps;                       /* ...and how fast it was turning, revolutions a second */
+    uint32_t sync_run;                  /* counts the times LinuxCNC has begun a move at the index */
 } tg_sample_t;
 
 static struct { volatile uint32_t seq; tg_wanted_t v; }    sh_wanted;
@@ -263,6 +282,8 @@ typedef struct {
     hal_bit_t   *enable, *ready, *fault, *connected, *probe, *estop;
     hal_bit_t   *spindle_fwd, *spindle_rev, *flood, *mist;
     hal_float_t *spindle_speed, *spindle_rps, *spindle_rpm;
+    hal_float_t *spindle_revs;          /* out: for spindle.N.revs */
+    hal_bit_t   *spindle_index_enable;  /* io:  for spindle.N.index-enable */
     hal_float_t *buffer_ms;
     hal_u32_t   *underruns, *resent, *corrections;
 
@@ -286,6 +307,9 @@ static uint32_t       rt_epoch;
 static int            rt_enabled;
 static uint32_t       rt_beat;
 static int64_t        rt_silent_ns;
+static double         rt_revs, rt_rps, rt_rps_shown;
+static uint32_t       rt_sync_run;
+static int            rt_said_no_sync;
 
 /* ===================================================================
  * Small helpers
@@ -423,6 +447,34 @@ static void tg_read(void *arg, long period)
     *h->estop = a.estop;
     *h->spindle_rpm = (double)a.rpm;
     *h->spindle_rps = (double)a.rpm / 60.0;
+    {
+        /* The copy of the spindle that LinuxCNC follows in G33 and G76 */
+        double dt = (double)(period > 0 ? period : 1000000) * 1.0e-9;
+        double measured = (double)a.rpm / 60.0;
+        rt_rps += (measured - rt_rps) * (dt / (SPINDLE_FILTER_S + dt));
+        rt_rps_shown = rt_rps * (1.0 + (double)a.spindle_trim);
+        if (rt_rps_shown < 0.0) rt_rps_shown = 0.0;
+        if (*h->spindle_index_enable) {
+            /* LinuxCNC waits for the index to begin a move in step with the
+             * spindle.  It is given one at once - its move then begins at
+             * turn 0 of the copy - and the controller begins that move as
+             * the real spindle passes its real index. */
+            if (a.can_sync && a.ready && (double)a.rpm >= SYNC_MIN_RPM) {
+                rt_revs = 0.0;
+                rt_sync_run++;
+                *h->spindle_index_enable = 0;
+                rt_said_no_sync = 0;
+            } else if (a.online && !a.can_sync && !rt_said_no_sync) {
+                rt_said_no_sync = 1;
+                rtapi_print_msg(RTAPI_MSG_ERR, COMP ": a move in step with the spindle (G33, G76) is waiting, but "
+                                "the controller has no spindle sensor it can cut a thread by: it needs an encoder, "
+                                "or a sensor giving one pulse per revolution, set up on the controller\n");
+            }
+        } else {
+            rt_revs += (*h->spindle_rev && !*h->spindle_fwd ? -rt_rps_shown : rt_rps_shown) * dt;
+        }
+        *h->spindle_revs = rt_revs;
+    }
     *h->buffer_ms = (double)a.buffer_ms;
     *h->underruns = a.underruns;
     *h->resent = a.resent;
@@ -515,6 +567,9 @@ static void tg_write(void *arg, long period)
         } else {
             s.ns = period > 0 ? (uint32_t)period : 1000000u;
             s.epoch = rt_epoch;
+            s.revs = rt_revs;
+            s.rps = (float)rt_rps_shown;
+            s.sync_run = rt_sync_run;
             samples[head & (SAMPLE_RING - 1)] = s;
             tg_barrier();
             smp_head = head + 1;
@@ -560,6 +615,9 @@ typedef struct {
     int64_t     position[MAX_JOINTS];   /* steps as LinuxCNC counts them; survives a reconnection */
 
     uint64_t    online_ms, ping_ms, pong_ms, io_ms, command_ms;
+    uint64_t    sync_ms;                /* when motion in step with the spindle was last sent or being played */
+    uint8_t     spindle_on;             /* the spindle as LinuxCNC last had it running */
+    uint16_t    spindle_on_rpm;
     uint8_t     io_last[8];
     int         io_sent;
 
@@ -1056,6 +1114,18 @@ static void pump_outputs(link_t *L, const tg_wanted_t *w, int running, uint64_t 
         io.misc_outputs = w->outputs;
         io.spindle_state = w->spindle;
         io.spindle_rpm = w->rpm;
+        if (w->spindle) {
+            L->spindle_on = w->spindle;
+            L->spindle_on_rpm = w->rpm;
+        } else if (L->spindle_on && w->enable && running && now - L->sync_ms < 250) {
+            /* LinuxCNC has switched the spindle off, but motion it made in
+             * step with the spindle is still on its way to the motors: the
+             * spindle runs on until that has been played. */
+            io.spindle_state = L->spindle_on;
+            io.spindle_rpm = L->spindle_on_rpm;
+        } else {
+            L->spindle_on = 0;
+        }
         io.coolant_state = w->coolant;
         if (w->enable && running) io.flags |= WCNC_IO_FLAG_CHARGE_PUMP;
         /* The controller's own limit stop must stand aside while LinuxCNC
@@ -1114,6 +1184,15 @@ typedef struct {
     uint32_t underruns, resent, corrections, buffer_ms;
     uint32_t target_ms;                 /* tiggy.buffer-target-ms */
     int      in_underrun, said_overspeed;
+
+    /* motion in step with the spindle */
+    int      sync;                      /* what is being collected is played by the spindle */
+    int      index_pending;             /* ...and the next segment begins a move at the index */
+    uint32_t sync_run;                  /* tg_sample_t.sync_run of the newest period */
+    uint32_t ref_mrpm;                  /* speed of the copy when the move began, 1/1000 rpm */
+    double   revs_last, revs_sent;      /* the copy's position: newest period, and up to where sent */
+    double   sync_carry;
+    double   vtrim;                     /* tg_actual_t.spindle_trim */
 } motion_t;
 
 static motion_t mot;
@@ -1169,9 +1248,13 @@ static void motion_clear_stream(motion_t *m)
     m->in_underrun = 0;
     m->t_foreign = 0;
     m->lag_us = 0;
+    m->sync = 0;
+    m->index_pending = 0;
+    m->sync_carry = 0.0;
+    m->vtrim = 0.0;
 }
 
-static int push_segment(motion_t *m, const int64_t steps[MAX_JOINTS], uint32_t duration_us, uint8_t flags)
+static int push_segment(motion_t *m, const int64_t steps[MAX_JOINTS], uint32_t duration_us, unsigned flags)
 {
     if ((uint32_t)(m->q_end - m->q_base) >= SEG_RING) {
         motion_fault("the controller is not taking the motion it is sent: stopped");
@@ -1184,6 +1267,7 @@ static int push_segment(motion_t *m, const int64_t steps[MAX_JOINTS], uint32_t d
     s->duration_us = duration_us ? duration_us : 1;
     s->segment_id = (uint16_t)m->q_end;
     s->flags = (uint8_t)(WCNC_SEG_FLAG_TIMED | WCNC_SEG_FLAG_SUBSTEP | flags);
+    if (flags & WCNC_SEG_FLAG_SPINDLE_SYNC) s->acceleration = m->ref_mrpm;   /* the speed it is timed for */
     m->unacked_us += s->duration_us;
     m->q_end++;
     return 1;
@@ -1238,13 +1322,38 @@ static void close_segment(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t
             m->trim = 0.0;
             m->err_filt = 0.0;
         }
-        /* Clock matching: tell the controller the segment is a touch longer
-         * or shorter than LinuxCNC's time, so its queue stays at its level
-         * however the two clocks differ. */
-        m->dur_carry += (double)us * (1.0 + m->trim);
-        uint32_t dur = (uint32_t)m->dur_carry;
-        m->dur_carry -= (double)dur;
-        if (!push_segment(m, steps, dur, 0)) return;
+        uint32_t dur;
+        unsigned flags = 0;
+        if (m->sync) {
+            /* In step with the spindle: the segment lasts as long as the
+             * copy of the spindle took over it would take at the speed the
+             * move began at.  The controller turns that back into an angle. */
+            double turned = fabs(m->revs_last - m->revs_sent);
+            double at_ref = turned * 6.0e10 / (double)m->ref_mrpm;      /* microseconds */
+            if (at_ref < SYNC_LEAVE * (double)us && !m->index_pending) {
+                /* The spindle has all but stopped and LinuxCNC still moves:
+                 * this is no longer the thread, and cannot wait for a
+                 * spindle that may never turn again. */
+                m->sync = 0;
+            } else {
+                m->sync_carry += at_ref;
+                dur = (uint32_t)m->sync_carry;
+                m->sync_carry -= (double)dur;
+                flags = WCNC_SEG_FLAG_SPINDLE_SYNC | (m->index_pending ? WCNC_SEG_FLAG_INDEX_START : 0);
+                m->index_pending = 0;
+                L->sync_ms = now;
+            }
+            m->revs_sent = m->revs_last;
+        }
+        if (!flags) {
+            /* Clock matching: tell the controller the segment is a touch
+             * longer or shorter than LinuxCNC's time, so its queue stays at
+             * its level however the two clocks differ. */
+            m->dur_carry += (double)us * (1.0 + m->trim);
+            dur = (uint32_t)m->dur_carry;
+            m->dur_carry -= (double)dur;
+        }
+        if (!push_segment(m, steps, dur, flags)) return;
         for (int j = 0; j < MAX_JOINTS; j++) m->sent[j] = m->last[j];
     } else if (m->open) {
         /* The first period of standstill ends the movement.  The fraction
@@ -1257,6 +1366,8 @@ static void close_segment(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t
         }
         if (!push_segment(m, steps, us, WCNC_SEG_FLAG_LAST)) return;
         for (int j = 0; j < MAX_JOINTS; j++) m->sent[j] += steps[j];
+        m->sync = 0;
+        m->index_pending = 0;
         m->open = 0;
         m->gap_us = 0;
         m->idle_checked = 0;
@@ -1298,9 +1409,26 @@ static void take_samples(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t 
         if (!m->have_last) {
             settle(m, s.target);                /* the first period after starting */
             if (m->state != M_RUN) break;
-        } else if (memcmp(s.target, m->last, sizeof(m->last)) != 0) {
-            m->seg_moving = 1;
+        } else {
+            if (s.sync_run != m->sync_run) {
+                /* LinuxCNC begins a move in step with the spindle with this
+                 * period.  What came before is a segment of its own; from
+                 * here on, until the machine next stands still, everything
+                 * is played by the spindle. */
+                if (m->seg_ns) close_segment(L, m, w, now);
+                if (m->state != M_RUN) break;
+                double mrpm = (double)s.rps * 60000.0;
+                m->ref_mrpm = mrpm < (double)WCNC_SYNC_MIN_MILLI_RPM ? WCNC_SYNC_MIN_MILLI_RPM : (uint32_t)mrpm;
+                m->sync = 1;
+                m->index_pending = 1;
+                m->revs_sent = s.revs;
+                m->sync_carry = 0.0;
+                m->force_move = 1;              /* the index is waited for even if the first segment is short */
+            }
+            if (memcmp(s.target, m->last, sizeof(m->last)) != 0) m->seg_moving = 1;
         }
+        m->sync_run = s.sync_run;
+        m->revs_last = s.revs;
         memcpy(m->last, s.target, sizeof(m->last));
         m->have_last = 1;
         m->seg_ns += s.ns;
@@ -1371,6 +1499,14 @@ static void motion_on_status(link_t *L, uint64_t now)
         m->t_progress = now;
     }
 
+    if (st->stream_flags & WCNC_STREAM_SYNC_LOST) {
+        motion_fault("screw cutting: the controller abandoned the pass part-way (%s) - check the thread and the tool",
+                     (st->stream_flags & WCNC_STREAM_UNDERRUN) ? "it was not kept supplied with motion"
+                                                               : "the axes could not keep up with the spindle");
+        return;
+    }
+    if (st->stream_flags & (WCNC_STREAM_SPINDLE_SYNC | WCNC_STREAM_WAIT_INDEX)) L->sync_ms = now;
+
     int underrun = (st->stream_flags & WCNC_STREAM_UNDERRUN) != 0;
     if (underrun && !m->in_underrun && m->open) m->underruns++;
     m->in_underrun = underrun;
@@ -1378,7 +1514,19 @@ static void motion_on_status(link_t *L, uint64_t now)
     if (m->open) {
         uint64_t ahead_us = (uint64_t)st->queued_ms * 1000u + m->unacked_us + m->seg_ns / 1000u;
         m->buffer_ms = (uint32_t)(ahead_us / 1000u);
-        if (now - m->t_open > 500 && !underrun) {
+        if (m->sync) {
+            /* The controller takes the motion as fast as the spindle turns;
+             * LinuxCNC makes it as fast as the copy turns.  The copy is
+             * slowed or hurried so that the queue keeps its level - also
+             * after the wait for the index, which fills it. */
+            double err = (double)ahead_us / 1.0e6 - (double)m->target_ms / 1000.0;
+            double vt = -SYNC_TRIM_GAIN * err;
+            if (vt < -SYNC_TRIM_SLOWER) vt = -SYNC_TRIM_SLOWER;
+            if (vt > SYNC_TRIM_FASTER) vt = SYNC_TRIM_FASTER;
+            m->vtrim += (vt - m->vtrim) * 0.05;
+            m->trim = 0.0;
+            m->err_filt = 0.0;
+        } else if (now - m->t_open > 500 && !underrun) {
             double target_s = (double)m->target_ms / 1000.0;
             double err = (double)ahead_us / 1.0e6 - target_s;
             m->err_filt += (err - m->err_filt) * 0.02;
@@ -1390,6 +1538,7 @@ static void motion_on_status(link_t *L, uint64_t now)
     } else {
         m->buffer_ms = st->queued_ms;
     }
+    if (!m->sync) m->vtrim *= 0.95;
 }
 
 static void motion_service(link_t *L, const tg_wanted_t *w, uint64_t now)
@@ -1552,6 +1701,8 @@ static void publish(link_t *L)
         a.rpm = L->st.spindle_rpm;
     }
     memcpy(a.position, L->position, sizeof(a.position));
+    a.can_sync = (uint8_t)(live && (L->hs.capabilities & WCNC_CAP_SPINDLE_SYNC) != 0);
+    a.spindle_trim = (float)mot.vtrim;
     a.underruns = mot.underruns;
     a.resent = mot.resent;
     a.corrections = mot.corrections;
@@ -1774,6 +1925,8 @@ static int export_pins(tg_hal_t *h)
     CHECK(hal_pin_float_newf(HAL_IN, &h->spindle_speed, comp_id, COMP ".spindle-speed"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_rps, comp_id, COMP ".spindle-speed-fb"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_rpm, comp_id, COMP ".spindle-speed-fb-rpm"));
+    CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_revs, comp_id, COMP ".spindle-revs"));
+    CHECK(hal_pin_bit_newf(HAL_IO, &h->spindle_index_enable, comp_id, COMP ".spindle-index-enable"));
     CHECK(hal_pin_bit_newf(HAL_IN, &h->flood, comp_id, COMP ".coolant-flood"));
     CHECK(hal_pin_bit_newf(HAL_IN, &h->mist, comp_id, COMP ".coolant-mist"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->buffer_ms, comp_id, COMP ".buffer-ms"));

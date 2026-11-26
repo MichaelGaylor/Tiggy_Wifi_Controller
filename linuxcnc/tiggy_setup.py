@@ -177,6 +177,9 @@ def ask_machine(ask):
     if kind == "p":
         m["max_rpm"] = ask.number("Spindle speed at full PWM, rpm", 24000.0, 1.0)
         m["pwm_freq"] = ask.whole("PWM frequency, Hz", 1000, 1, 50000)
+    say("  For screw cutting (G33, G76) the controller needs a sensor on the spindle: an encoder,")
+    say("  or one pulse per revolution.  It is set up on the controller (terminal layout, kind of sensor).")
+    m["threading"] = ask.yes("Is there such a sensor, for screw cutting", False)
 
     heading("Safety")
     m["estop"] = ask.yes("Is an E-stop button wired to the controller's E-stop input", False)
@@ -457,6 +460,12 @@ def write_hal(m, path):
         w("net spindle-forward spindle.0.forward       => tiggy.spindle-forward")
         w("net spindle-reverse spindle.0.reverse       => tiggy.spindle-reverse")
         w("net spindle-speed   spindle.0.speed-out-abs => tiggy.spindle-speed")
+    if m.get("threading"):
+        w("# Screw cutting: LinuxCNC follows a smooth copy of the spindle that the driver")
+        w("# makes; the controller cuts by the real one (see the README).")
+        w("net spindle-revs         tiggy.spindle-revs         => spindle.0.revs")
+        w("net spindle-speed-in     tiggy.spindle-speed-fb     => spindle.0.speed-in")
+        w("net spindle-index-enable tiggy.spindle-index-enable <=> spindle.0.index-enable")
     w("net coolant-flood iocontrol.0.coolant-flood => tiggy.coolant-flood")
     w("net coolant-mist  iocontrol.0.coolant-mist  => tiggy.coolant-mist")
     w("")
@@ -509,6 +518,7 @@ def main():
     ap.add_argument("--address", help="address of the controller (with --defaults)")
     ap.add_argument("--dir", help="folder to write to (default ~/linuxcnc/configs/<name>)")
     ap.add_argument("--no-toolchange-prompt", action="store_true", help="tool changes need no confirmation on screen")
+    ap.add_argument("--spindle-sensor", action="store_true", help="with --defaults: wire up screw cutting (G33, G76)")
     args = ap.parse_args()
 
     global QUIET
@@ -523,6 +533,8 @@ def main():
         m["address"] = args.address
     if args.no_toolchange_prompt:
         m["manual_toolchange"] = False
+    if args.spindle_sensor:
+        m["threading"] = True
 
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in m["name"]) or "Tiggy"
     folder = args.dir or os.path.join(os.path.expanduser("~"), "linuxcnc", "configs", safe)
