@@ -7,7 +7,7 @@
 	(title_block
 		(title "Tiggy DevKitC carrier - Supply")
 		(rev "A")
-		(comment 1 "Four axes, Ethernet, spindle sensor, opto-isolated inputs, three relays")
+		(comment 1 "Six axes, or four and three relays; Ethernet, spindle sensor, opto-isolated inputs")
 		(comment 2 "Drawn by gen/gen_sch.py from gen/design.py - change it there")
 	)
 	(lib_symbols

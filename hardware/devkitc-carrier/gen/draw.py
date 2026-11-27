@@ -115,7 +115,7 @@ class Page:
         if mirror:
             s.append(["mirror", mirror])
         s += [["unit", unit], ["body_style", 1], ["exclude_from_sim", "no"],
-              ["in_bom", "no" if ref.startswith(("H", "JP")) else "yes"],     # as their footprints say
+              ["in_bom", "no" if ref.startswith("H") or "SolderJumper" in part["fp"] else "yes"],    # as their footprints say
               ["on_board", "yes"], ["in_pos_files", "yes"], ["dnp", "no"], ["uuid", uid("sym", ref, unit)],
               self._prop("Reference", ref, x + rdx, y + rdy, just=just, hide=hide, angle=angle),
               self._prop("Value", part["value"], x + vdx, y + vdy, just=just, hide=hide, angle=angle),

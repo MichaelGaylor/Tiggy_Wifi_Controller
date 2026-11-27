@@ -7,7 +7,7 @@
 	(title_block
 		(title "Tiggy DevKitC carrier - Controller")
 		(rev "A")
-		(comment 1 "Four axes, Ethernet, spindle sensor, opto-isolated inputs, three relays")
+		(comment 1 "Six axes, or four and three relays; Ethernet, spindle sensor, opto-isolated inputs")
 		(comment 2 "Drawn by gen/gen_sch.py from gen/design.py - change it there")
 	)
 	(lib_symbols
@@ -746,23 +746,23 @@
 			(effects (font (size 1 1)) (justify right))
 		)
 	)
-	(global_label "OUT1"
+	(global_label "IO11"
 		(shape output)
 		(at 119.38 116.84 180)
 		(fields_autoplaced yes)
 		(effects (font (size 1.27 1.27)) (justify right))
-		(uuid "853c6abf-563a-54d8-aaa0-86faec417a9f")
+		(uuid "0ac76cd3-063d-517d-a305-6ec358fb87c6")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 110.5 116.84 0)
 			(effects (font (size 1 1)) (justify right))
 		)
 	)
-	(global_label "OUT2"
+	(global_label "IO12"
 		(shape output)
 		(at 119.38 119.38 180)
 		(fields_autoplaced yes)
 		(effects (font (size 1.27 1.27)) (justify right))
-		(uuid "bab278eb-b1a7-5521-bd9f-367256f90ab0")
+		(uuid "2ca8fc0a-0d7f-5e5a-8ab2-0a2d613ee009")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 110.5 119.38 0)
 			(effects (font (size 1 1)) (justify right))
@@ -847,25 +847,25 @@
 			(effects (font (size 1 1)) (justify left))
 		)
 	)
-	(global_label "OUT3"
+	(global_label "IO40"
 		(shape output)
 		(at 165.1 93.98 0)
 		(fields_autoplaced yes)
 		(effects (font (size 1.27 1.27)) (justify left))
-		(uuid "ed9c833b-417b-58a5-8a5d-17929e6cb2fb")
+		(uuid "9bc27959-10e3-5112-be95-5d8714342b71")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 173.98 93.98 0)
 			(effects (font (size 1 1)) (justify left))
 		)
 	)
-	(global_label "CPUMP"
+	(global_label "IO39"
 		(shape output)
 		(at 165.1 96.52 0)
 		(fields_autoplaced yes)
 		(effects (font (size 1.27 1.27)) (justify left))
-		(uuid "79b5b36e-d830-5b50-b7b4-129feb19dc85")
+		(uuid "f75c16ef-6aec-550b-be54-4dd5e1415d27")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 175.05 96.52 0)
+			(at 173.98 96.52 0)
 			(effects (font (size 1 1)) (justify left))
 		)
 	)
@@ -1038,6 +1038,12 @@
 		(effects (font (size 1.27 1.27)) (justify left bottom))
 		(uuid "2db7defa-0b8a-5230-8432-5cc4106a2d07")
 	)
+	(text "IO40, IO11, IO39, IO12: the B and C drives, or the relays and the charge pump - jumpers, page \"Drives B, C\"."
+		(exclude_from_sim no)
+		(at 101.6 153.67 0)
+		(effects (font (size 1.27 1.27)) (justify left bottom))
+		(uuid "b5863ffd-827b-5320-973a-22657d5496ef")
+	)
 	(symbol
 		(lib_id "Mechanical:MountingHole")
 		(at 25.4 152.4 0)
@@ -1196,6 +1202,18 @@
 		(effects (font (size 1.27 1.27)) (justify left))
 		(uuid "96cffd22-0ce6-5ffc-820e-39e3f69e87d4")
 	)
+	(text "page 9"
+		(exclude_from_sim no)
+		(at 219.94 144.145 0)
+		(effects (font (size 1.27 1.27)) (justify left))
+		(uuid "cf085dee-068c-5f06-9eab-968ba1f44f50")
+	)
+	(text "page 10"
+		(exclude_from_sim no)
+		(at 219.94 158.115 0)
+		(effects (font (size 1.27 1.27)) (justify left))
+		(uuid "02cf80e2-2207-59a3-8bd3-66de9584d608")
+	)
 	(text "Controller"
 		(exclude_from_sim no)
 		(at 15 17 0)
@@ -1208,7 +1226,7 @@
 		(effects (font (size 1.5 1.5)) (justify left bottom))
 		(uuid "878726ad-4a90-57b8-b79b-db5d696ceace")
 	)
-	(text "Firmware environment esp32s3-devkitc, terminal layout \"four axes\"."
+	(text "Firmware environment esp32s3-devkitc, terminal layout \"six axes\" or \"four axes\"."
 		(exclude_from_sim no)
 		(at 15 25 0)
 		(effects (font (size 1.5 1.5)) (justify left bottom))
@@ -1494,12 +1512,12 @@
 		(fields_autoplaced yes)
 		(stroke (width 0.1524) (type solid))
 		(fill (color 0 0 0 0.0000))
-		(uuid "86e31b6e-480c-5c0e-b9b2-cc5a82554e65")
-		(property "Sheetname" "Inputs"
+		(uuid "d1126548-8ad7-5fb2-8490-ec939abacad5")
+		(property "Sheetname" "Drives B, C"
 			(at 218.44 70.42 0)
 			(effects (font (size 1.27 1.27)) (justify left bottom))
 		)
-		(property "Sheetfile" "inputs.kicad_sch"
+		(property "Sheetfile" "drives-b-c.kicad_sch"
 			(at 218.44 78.07 0)
 			(hide yes)
 			(effects (font (size 1.27 1.27)) (justify left top))
@@ -1518,12 +1536,12 @@
 		(fields_autoplaced yes)
 		(stroke (width 0.1524) (type solid))
 		(fill (color 0 0 0 0.0000))
-		(uuid "56dd9b80-d2e5-5c03-8d0f-fb81ffa9b4ec")
-		(property "Sheetname" "Spindle sensor"
+		(uuid "26e6825e-a503-57f9-8bb5-fec60af18a34")
+		(property "Sheetname" "Drive enable"
 			(at 218.44 84.39 0)
 			(effects (font (size 1.27 1.27)) (justify left bottom))
 		)
-		(property "Sheetfile" "spindle-sensor.kicad_sch"
+		(property "Sheetfile" "drive-enable.kicad_sch"
 			(at 218.44 92.04 0)
 			(hide yes)
 			(effects (font (size 1.27 1.27)) (justify left top))
@@ -1542,12 +1560,12 @@
 		(fields_autoplaced yes)
 		(stroke (width 0.1524) (type solid))
 		(fill (color 0 0 0 0.0000))
-		(uuid "321dd13f-c382-5229-a291-63ea17bb2c15")
-		(property "Sheetname" "Relays"
+		(uuid "86e31b6e-480c-5c0e-b9b2-cc5a82554e65")
+		(property "Sheetname" "Inputs"
 			(at 218.44 98.36 0)
 			(effects (font (size 1.27 1.27)) (justify left bottom))
 		)
-		(property "Sheetfile" "relays.kicad_sch"
+		(property "Sheetfile" "inputs.kicad_sch"
 			(at 218.44 106.01 0)
 			(hide yes)
 			(effects (font (size 1.27 1.27)) (justify left top))
@@ -1566,12 +1584,12 @@
 		(fields_autoplaced yes)
 		(stroke (width 0.1524) (type solid))
 		(fill (color 0 0 0 0.0000))
-		(uuid "41a5ddcc-662a-5242-970c-4ee0f322b616")
-		(property "Sheetname" "Spindle speed"
+		(uuid "56dd9b80-d2e5-5c03-8d0f-fb81ffa9b4ec")
+		(property "Sheetname" "Spindle sensor"
 			(at 218.44 112.33 0)
 			(effects (font (size 1.27 1.27)) (justify left bottom))
 		)
-		(property "Sheetfile" "spindle-speed.kicad_sch"
+		(property "Sheetfile" "spindle-sensor.kicad_sch"
 			(at 218.44 119.98 0)
 			(hide yes)
 			(effects (font (size 1.27 1.27)) (justify left top))
@@ -1590,18 +1608,66 @@
 		(fields_autoplaced yes)
 		(stroke (width 0.1524) (type solid))
 		(fill (color 0 0 0 0.0000))
-		(uuid "35d4c741-1696-5f74-aba4-37ca1a5026a6")
-		(property "Sheetname" "Ethernet"
+		(uuid "321dd13f-c382-5229-a291-63ea17bb2c15")
+		(property "Sheetname" "Relays"
 			(at 218.44 126.3 0)
 			(effects (font (size 1.27 1.27)) (justify left bottom))
 		)
-		(property "Sheetfile" "ethernet.kicad_sch"
+		(property "Sheetfile" "relays.kicad_sch"
 			(at 218.44 133.95 0)
 			(hide yes)
 			(effects (font (size 1.27 1.27)) (justify left top))
 		)
 		(instances
 			(project "tiggy-devkitc-carrier" (path "/89bf425d-c224-58f0-ab76-f03393246ef6" (page "8")))
+		)
+	)
+	(sheet
+		(at 218.44 140.97)
+		(size 35.56 6.35)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke (width 0.1524) (type solid))
+		(fill (color 0 0 0 0.0000))
+		(uuid "41a5ddcc-662a-5242-970c-4ee0f322b616")
+		(property "Sheetname" "Spindle speed"
+			(at 218.44 140.27 0)
+			(effects (font (size 1.27 1.27)) (justify left bottom))
+		)
+		(property "Sheetfile" "spindle-speed.kicad_sch"
+			(at 218.44 147.92 0)
+			(hide yes)
+			(effects (font (size 1.27 1.27)) (justify left top))
+		)
+		(instances
+			(project "tiggy-devkitc-carrier" (path "/89bf425d-c224-58f0-ab76-f03393246ef6" (page "9")))
+		)
+	)
+	(sheet
+		(at 218.44 154.94)
+		(size 35.56 6.35)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke (width 0.1524) (type solid))
+		(fill (color 0 0 0 0.0000))
+		(uuid "35d4c741-1696-5f74-aba4-37ca1a5026a6")
+		(property "Sheetname" "Ethernet"
+			(at 218.44 154.24 0)
+			(effects (font (size 1.27 1.27)) (justify left bottom))
+		)
+		(property "Sheetfile" "ethernet.kicad_sch"
+			(at 218.44 161.89 0)
+			(hide yes)
+			(effects (font (size 1.27 1.27)) (justify left top))
+		)
+		(instances
+			(project "tiggy-devkitc-carrier" (path "/89bf425d-c224-58f0-ab76-f03393246ef6" (page "10")))
 		)
 	)
 	(sheet_instances (path "/" (page "1")))

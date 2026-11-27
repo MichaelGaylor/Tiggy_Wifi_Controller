@@ -119,11 +119,13 @@ def main(netlist, out):
         r.SetTextThickness(mm(0.1 if small else 0.15))
         if ref.startswith("H"):
             r.SetVisible(False)
-        if ref.startswith("A") or (ref[0] in "RCDQ"):    # sockets: the silkscreen says what goes there; small
-            r.SetLayer(pcbnew.F_Fab)                    # parts: on the assembly drawing, not across their pads
+        if ref.startswith("A") or (ref[0] in "RCDQ") or "PinHeader" in part["fp"]:
+            r.SetLayer(pcbnew.F_Fab)                    # sockets, jumpers: the silkscreen says what they are; small
+                                                        # parts: on the assembly drawing, not across their pads
         if ref in design.TERMINALS:                     # a connector's reference goes inside its outline
             wide = "MSTB" in part["fp"]
-            dx, dy = turn(-2.3 if wide else (-0.5 if len(design.TERMINALS[ref]) > 4 else -1.7), 6.0 if wide else 6.9, rot)
+            dx, dy = turn(-2.3 if wide else (-0.5 if len(design.TERMINALS[ref]) > 4 else -1.7 + 0.4 * (len(ref) - 2)),
+                          6.0 if wide else 6.9, rot)
             r.SetPosition(pt(x + dx, y + dy))
             r.SetTextSize(pcbnew.VECTOR2I(mm(0.8), mm(0.8)))
             r.SetTextThickness(mm(0.12))
@@ -183,11 +185,17 @@ def main(netlist, out):
                 text(board, name, x + px + inx * 3.8, y + py, size=0.7, rot=90)
             else:
                 text(board, name, x + px + inx * 2.5, y + py, h=left if inx > 0 else right)
-    for ref, title in (("J2", "X DRIVE"), ("J3", "Y DRIVE"), ("J4", "Z DRIVE"), ("J5", "A DRIVE"), ("J8", "ENCODER"),
-                       ("J12", "SPINDLE")):
+    for ref, title in [(plug, axis + " DRIVE") for axis, plug in design.DRIVES] + [("J8", "ENCODER"), ("J12", "SPINDLE")]:
         x, y, rot = by_ref[ref]["pcb"]
         n = len(design.TERMINALS[ref])
         text(board, title, x - 3.81 * (n - 1) / 2.0, y + 4.75, size=0.9)
+    # the jumpers: which way for which terminal layout
+    jx, jy = design.JUMPERS
+    across = design.JUMPER_PITCH * (len(design.SELECT) - 1)
+    text(board, "6 AXES", jx - 2.6, jy, size=0.9, h=right)
+    text(board, "4 AXES + RELAYS", jx - 2.6, jy + 5.08, size=0.9, h=right)
+    text(board, "B, C DRIVES OR RELAYS", jx + across / 2.0, jy - 3.3, size=0.8)
+    text(board, "all four the same way", jx + across / 2.0, jy + 8.3, size=0.7)
     text(board, "LIMITS", 11.0, 27.9, size=1.0, h=left)
     text(board, "INPUTS", 11.0, 54.5, size=1.0, h=left)
     text(board, "Tiggy DevKitC carrier", 74.4, 60.0, size=1.4, h=left)

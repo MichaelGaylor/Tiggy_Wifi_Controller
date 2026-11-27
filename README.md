@@ -106,9 +106,9 @@ Screw cutting is available to both hosts: G32 and G76 in Mach3 Turn through the 
 
 For screw cutting the host streams the threading pass like any other move, marked to be played *by the spindle* and to begin at its index (`WCNC_SEG_FLAG_SPINDLE_SYNC`, `WCNC_SEG_FLAG_INDEX_START` in `protocol/wifi_cnc_protocol.h`). The controller then advances through the move by the angle the spindle really turns, so the pitch does not depend on the spindle holding its speed, a spindle that stalls stops the axes with it, and every pass begins at the same place on the work. The Mach3 plugin does this for G32 and G76 in Mach3 Turn; the LinuxCNC driver does not use it yet.
 
-### A carrier board for this layout
+### A carrier board for either layout
 
-[`hardware/devkitc-carrier`](hardware/devkitc-carrier) is a KiCad project for a board that an ESP32-S3-DevKitC-1 plugs into, laid out for exactly this: four drives, a socket for a W5500 Ethernet module, seven opto-isolated inputs (limits, E-stop, probe), a separate plug for the spindle sensor, three relays and a 0 to 10 V spindle speed output. It is revision A and has not been built yet - see its README before ordering one.
+[`hardware/devkitc-carrier`](hardware/devkitc-carrier) is a KiCad project for a board that an ESP32-S3-DevKitC-1 plugs into. It has plugs for six drives, and four jumpers that give the pins of B and C either to their drives (six axes) or to three relays and the charge pump (four axes). Also on it: a socket for a W5500 Ethernet module, seven opto-isolated inputs (limits, E-stop, probe), a separate plug for the spindle sensor and a 0 to 10 V spindle speed output. It is revision A and has not been built yet - see its README before ordering one.
 
 ## Architecture
 

@@ -6,8 +6,9 @@ Generates the whole KiCad project from design.py and checks it with KiCad's own 
 
 Steps: project library -> schematic (one page per function, drawn by gen_sch.py) -> electrical
 rule check -> netlist, compared pin for pin with design.py -> board with the parts placed ->
-autorouting (Tracklayer, https://github.com/MichaelGaylor/Tracklayer) -> copper pours -> design
-rule check with the schematic compared against the board.  Reports land in build/.
+autorouting (Tracklayer, https://github.com/MichaelGaylor/Tracklayer) -> copper pours, a patch
+that the tracks have cut off joined to the rest with a via -> design rule check with the schematic
+compared against the board.  Reports land in build/; a fault found by a check ends the build.
 
 Needs KiCad 10 (kicad-cli and the Python that comes with it) and, for routing, Tracklayer with
 numpy.  Hand edits to the .kicad_sch / .kicad_pcb are overwritten: change design.py.
@@ -114,6 +115,9 @@ def main():
         if line.startswith("["):
             kinds[line[1:line.index("]")]] = kinds.get(line[1:line.index("]")], 0) + 1
     print("    ", ", ".join("%d %s" % (n, k) for k, n in sorted(kinds.items())) or "nothing reported")
+    if kinds:
+        print("NOT FIT TO BE MADE: see " + drc)
+        return 1
     return 0
 
 

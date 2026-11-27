@@ -28,7 +28,7 @@ ROOT = uid("root")
 
 def from_controller(net):
     """What the ESP32 drives (the rest it reads): the arrow of a label shows which way a signal goes."""
-    return net.startswith(("STEP_", "DIR_", "OUT")) or net in ("ENABLE", "SPINDLE", "CPUMP", "ETH_MOSI", "ETH_SCLK", "EN")
+    return net.startswith(("STEP_", "DIR_", "OUT", "IO")) or net in ("ENABLE", "SPINDLE", "CPUMP", "ETH_MOSI", "ETH_SCLK", "EN")
 
 
 def P(x, y):
@@ -59,6 +59,7 @@ CAPTIONS = {
     "Converter_DCDC:R-78E5.0-1.0": (-5.08, -3.7, -0.6, -3.7, "left"),
     "tiggy:ESP32-S3-DevKitC-1": (-10.16, -29.2, -4.5, -29.2, "left"),
     "tiggy:USR-ES1": (-7.62, -8.9, -2.5, -8.9, "left"),
+    "Jumper:Jumper_3_Bridged12": (-5.0, -2.2, -5.0, 2.6, "right"),
 }
 
 _drawn = set()
@@ -156,6 +157,8 @@ def page_controller(pg):
     pg.gnd(P(63, 53))
     pg.text("The pins are in the order of the DevKitC's two headers, the aerial at the top.", P(40, 57.5))
     pg.text("Pins without a name here are not used (the cross): the USB serial port, the memory, the LED, USB.", P(40, 59))
+    pg.text("IO40, IO11, IO39, IO12: the B and C drives, or the relays and the charge pump - jumpers, page \"Drives B, C\".",
+            P(40, 60.5))
 
     for i in range(4):                                      # the fixing holes
         pg.place("H%d" % (i + 1), *P(10 + 4 * i, 60))
@@ -209,15 +212,6 @@ def page_supply(pg):
 
 
 def page_drives(pg):
-    # enable: one buffer for all four drives
-    e = pg.place("U3", *P(52, 16), unit=1)
-    pg.wire(P(16, 16), e["2"])
-    pg.signal("ENABLE", P(16, 16), "L")
-    pg.to_gnd("R", "ENABLE", P(41, 16))
-    pg.gnd(e["1"])
-    pg.label("EN_O", P(56, 16))
-
-    # step and direction
     u = pg.place("U2", *P(52, 38))
     nets = BY_REF["U2"]["pins"]
     for i in range(8):
@@ -243,34 +237,92 @@ def page_drives(pg):
         pins[axis] = pg.place(ref, *P(78, yc), mirror="x")  # (pin 1 at the bottom, so that no two wires cross)
         pg.terminals(ref, pins[axis], "R")
         pg.gnd(pins[axis]["4"], "L")
+        en = pins[axis]["3"]                                # each drive's enable from a buffer of its own
+        pg.wire((73 * U, en[1]), en)
+        pg.glabel("%s_EN" % axis, (73 * U, en[1]), 180, "input")
     turn_at = {"X_DIR": 59, "X_STEP": 60, "Y_DIR": 61, "Y_STEP": 62, "Z_DIR": 62, "Z_STEP": 61, "A_DIR": 60, "A_STEP": 59}
     for i in range(8):
         net = nets[str(18 - i)]
         to = pins[net[0]]["1" if net.endswith("STEP") else "2"]
         x = turn_at[net]
         pg.wire(u[str(18 - i)], P(x, 33 + i), (x * U, to[1]), to)
-        pg.label(net, (69.5 * U, to[1]))
-    pg.wire(e["3"], P(68, 16), P(68, 47), pins["A"]["3"])   # enable, down past all four
-    for axis in "XYZ":
-        pg.wire((68 * U, pins[axis]["3"][1]), pins[axis]["3"])
+        pg.label(net, (63 * U, to[1]))
+    pg.text("The B and C drives, for six axes: page \"Drives B, C\".", P(16, 56))
 
-    # the rest of U3
-    s = pg.place("U3", *P(24, 60), unit=5)
-    pg.sup("+5V", P(24, 53))
-    pg.wire(P(24, 53), s["14"])
-    pg.wire(P(24, 54), P(33, 54), P(33, 58.5))
-    c = pg.two("C", "+5V", "GND", P(33, 58.5), "D", group="Drives")
-    pg.wire(c, P(33, 66), P(24, 66))
-    pg.wire(s["7"], P(24, 66))
-    pg.gnd(P(24, 66))
-    d = pg.place("U3", *P(48, 60), unit=4)
-    pg.wire(d["12"], P(44, 60), P(44, 61))
-    pg.gnd(P(44, 61))
-    pg.nc(d["11"])
-    pg.wire(d["13"], P(48, 64), P(54, 64), P(54, 57))
-    pg.sup("+5V", P(54, 57))
-    pg.text("spare gate, switched off", P(44, 66.5))
-    pg.text("U3's other two gates: Spindle speed page", P(20, 69))
+
+def page_bc(pg):
+    """The B and C drives, and the four jumpers that give their pins to them or to the relays."""
+    what = {"STEP_B": "B step", "DIR_B": "B direction", "STEP_C": "C step", "DIR_C": "C direction",
+            "OUT1": "relay 1", "OUT2": "relay 2", "OUT3": "relay 3", "CPUMP": "charge pump"}
+    out = {}
+    for k, (pin, six, four) in enumerate(design.SELECT):
+        r = 13 + 13 * k
+        j = pg.place(with_pin("Jumper:Jumper_3_Bridged12", 2, pin), *P(30, r + 4), rot=270)   # 1 above, 3 below
+        pg.wire(P(16, r + 4), j["2"])
+        pg.glabel(pin, P(16, r + 4), 180, "input")
+        g = pg.place("U6", *P(50, r + 2), unit=k + 1)
+        a, oe, y = sorted(g, key=lambda n: g[n][0])         # input, output enable, output
+        pg.wire(j["1"], g[a])
+        pg.to_gnd("R", six, P(43, r + 2))                   # low with four axes, and while the ESP32 is in reset
+        pg.label(six, P(43.5, r + 2))
+        pg.gnd(g[oe])
+        pg.wire(j["3"], P(33, r + 6))
+        pg.glabel(four, P(33, r + 6), 0, "output")
+        pg.text("six axes: " + what[six], P(31, r + 1.5))
+        pg.text("four axes: " + what[four], P(31, r + 8.6))
+        out[six] = g[y]
+
+    for axis, ref, yc in (("B", "J13", 22), ("C", "J14", 48)):
+        p = pg.place(ref, *P(82, yc))                       # terminals at x = 80: step, direction, enable, 0 V
+        pg.terminals(ref, p, "R")
+        pg.gnd(p["4"], "L")
+        s, d = out["STEP_" + axis], out["DIR_" + axis]
+        pg.wire(s, (66 * U, s[1]), (66 * U, p["1"][1]), p["1"])
+        pg.wire(d, (64 * U, d[1]), (64 * U, p["2"][1]), p["2"])
+        pg.label("%s_STEP" % axis, (70 * U, p["1"][1]))
+        pg.label("%s_DIR" % axis, (70 * U, p["2"][1]))
+        pg.wire((76 * U, p["3"][1]), p["3"])
+        pg.glabel("%s_EN" % axis, (76 * U, p["3"][1]), 180, "input")
+
+    s = pg.place("U6", *P(97, 34), unit=5)
+    pg.sup("+5V", P(97, 27))
+    pg.wire(P(97, 27), s["14"])
+    pg.wire(P(97, 28), P(106, 28), P(106, 32.5))
+    c = pg.two("C", "+5V", "GND", P(106, 32.5), "D", group="Drives B, C")
+    pg.wire(c, P(106, 40), P(97, 40))
+    pg.wire(s["7"], P(97, 40))
+    pg.gnd(P(97, 40))
+
+    pg.text("Four links, all set the same way and to match the firmware's terminal layout.  Towards \"6 AXES\" (as drawn, and as", P(14, 65))
+    pg.text("a new controller is set): six drives.  Towards \"4 AXES + RELAYS\": four drives, three relays and the charge pump.", P(14, 66.5))
+    pg.text("With six axes the limit switches of B and C go to terminals A and B of the spindle sensor plug.", P(14, 68))
+
+
+def page_enable(pg):
+    u = pg.place("U7", *P(52, 38))                          # inputs at x = 47, rows 33 to 40; outputs at x = 57
+    pg.wire(P(18, 33), u["2"])
+    pg.signal("ENABLE", P(18, 33), "L")
+    pg.to_gnd("R", "ENABLE", P(30, 33))                     # off while the ESP32 is in reset
+    pg.wire(P(42, 33), P(42, 38))
+    for n in range(3, 8):
+        pg.wire(P(42, 31 + n), u[str(n)])
+    for i, axis in enumerate("XYZABC"):
+        pg.wire(u[str(18 - i)], P(64, 33 + i))
+        pg.glabel("%s_EN" % axis, P(64, 33 + i), 0, "output")
+    pg.nc(u["12"])
+    pg.nc(u["11"])
+    pg.wire(u["8"], P(44, 39), P(44, 47), P(52, 47))        # the two spare inputs, and both output enables
+    pg.wire(u["9"], P(44, 40))
+    pg.wire(u["1"], P(44, 42))
+    pg.wire(u["19"], P(44, 43))
+    pg.wire(u["10"], P(52, 47))
+    pg.gnd(P(52, 47))
+    pg.sup("+5V", P(52, 25))
+    pg.wire(P(52, 25), u["20"])
+    pg.wire(P(52, 26), P(58, 26))
+    pg.to_gnd("C", "+5V", P(58, 26), group="Enable")
+    pg.text("A buffer for each drive, so that no output has more than one drive's enable input to supply.", P(16, 54))
+    pg.text("The last two are not used.", P(16, 55.5))
 
 
 def _input(pg, x0, y0, n, name, net, terminal, via=None):
@@ -355,6 +407,8 @@ def page_sensor(pg):
     pg.text("A, B: an encoder's two tracks.  Z: its index, or one pulse per turn from a single sensor.", P(12, 54))
     pg.text("Sensors with open-collector (NPN) or 5 V push-pull outputs; up to 24 V on a terminal does no harm.", P(12, 55.5))
     pg.text("With no sensor fitted the three are spare inputs 2 to 4.", P(12, 57))
+    pg.text("With six axes: A and B are the limit switches of the B and C axes (a switch to 0V), Z a spare input or one pulse per turn.",
+            P(12, 58.5))
 
 
 def page_relays(pg):
@@ -447,7 +501,25 @@ def page_spindle(pg):
     pg.wire(s["6"], P(43, 61), P(43, 64), P(52, 64), P(52, 60), s["7"])
     pg.text("spare half, parked", P(54, 60.5))
     pg.text("The 0-10V output needs 12 V or more at the supply terminal to reach 10 V.", P(14, 68))
-    pg.text("U3's supply pins and its enable gate: Drives page.", P(14, 69.5))
+    pg.text("The charge pump is there with four axes only (jumpers, page \"Drives B, C\").", P(14, 69.5))
+
+    w = pg.place("U3", *P(88, 27), unit=5)                  # the rest of U3
+    pg.sup("+5V", P(88, 20))
+    pg.wire(P(88, 20), w["14"])
+    pg.wire(P(88, 21), P(97, 21), P(97, 25.5))
+    c = pg.two("C", "+5V", "GND", P(97, 25.5), "D", group="Spindle speed")
+    pg.wire(c, P(97, 33), P(88, 33))
+    pg.wire(w["7"], P(88, 33))
+    pg.gnd(P(88, 33))
+    for unit, yg in ((1, 43), (4, 54)):
+        d = pg.place("U3", *P(88, yg), unit=unit)
+        a, oe, out = sorted(d, key=lambda n: d[n][0])       # input, output enable, output
+        pg.wire(d[a], P(84, yg), P(84, yg + 1))
+        pg.gnd(P(84, yg + 1))
+        pg.nc(d[out])
+        pg.wire(d[oe], P(88, yg + 4), P(94, yg + 4), P(94, yg - 3))
+        pg.sup("+5V", P(94, yg - 3))
+    pg.text("two gates not used, switched off", P(82, 61))
 
 
 def page_ethernet(pg):
@@ -506,17 +578,22 @@ def page_ethernet(pg):
 PAGES = [
     ("controller", "Controller", None,
      "ESP32-S3-DevKitC-1 (the version with octal memory) on two socket strips.\n"
-     "Firmware environment esp32s3-devkitc, terminal layout \"four axes\".", page_controller),
+     "Firmware environment esp32s3-devkitc, terminal layout \"six axes\" or \"four axes\".", page_controller),
     ("supply", "Supply", "supply.kicad_sch",
      "12 to 24 V in; 5 V for the board from a switching converter.", page_supply),
     ("drives", "Drives", "drives.kicad_sch",
-     "Step, direction and enable for four drives, as 5 V push-pull outputs.", page_drives),
+     "Step and direction for the X, Y, Z and A drives, as 5 V push-pull outputs.", page_drives),
+    ("bc", "Drives B, C", "drives-b-c.kicad_sch",
+     "Four pins of the ESP32 are either the B and C drives (six axes) or the relays and the charge pump (four axes).\n"
+     "A jumper for each chooses.", page_bc),
+    ("enable", "Drive enable", "drive-enable.kicad_sch",
+     "The enable signal to the six drives, as 5 V push-pull outputs.", page_enable),
     ("inputs", "Inputs", "inputs.kicad_sch",
      "Seven opto-isolated inputs: four limit switches, emergency stop, probe, one spare.", page_inputs),
     ("sensor", "Spindle sensor", "spindle-sensor.kicad_sch",
      "Three fast inputs for an encoder on the spindle (screw cutting), squared up by Schmitt triggers on 3.3 V.", page_sensor),
     ("relays", "Relays", "relays.kicad_sch",
-     "Three relays on the auxiliary outputs 1 to 3, each with a lamp.", page_relays),
+     "Three relays on the auxiliary outputs 1 to 3, each with a lamp.  With four axes only: page \"Drives B, C\".", page_relays),
     ("spindle", "Spindle speed", "spindle-speed.kicad_sch",
      "The spindle's speed as PWM and as 0 to 10 V for a frequency converter, and the charge pump signal.", page_spindle),
     ("ethernet", "Ethernet", "ethernet.kicad_sch",
@@ -565,7 +642,7 @@ def build():
     out = {}
     for number, (pg, (key, title, file, note, fn)) in enumerate(zip(pages, PAGES), 1):
         block = ["title_block", ["title", Q("Tiggy DevKitC carrier - %s" % title)], ["rev", Q(design.REV)],
-                 ["comment", 1, Q("Four axes, Ethernet, spindle sensor, opto-isolated inputs, three relays")],
+                 ["comment", 1, Q("Six axes, or four and three relays; Ethernet, spindle sensor, opto-isolated inputs")],
                  ["comment", 2, Q("Drawn by gen/gen_sch.py from gen/design.py - change it there")]]
         tree = pg.tree(SCH_VERSION, ROOT if number == 1 else uid("pagefile", key), block, sheets if number == 1 else ())
         out[file or design.NAME + ".kicad_sch"] = dump(tree) + "\n"

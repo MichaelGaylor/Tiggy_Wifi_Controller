@@ -7,7 +7,7 @@
 	(title_block
 		(title "Tiggy DevKitC carrier - Relays")
 		(rev "A")
-		(comment 1 "Four axes, Ethernet, spindle sensor, opto-isolated inputs, three relays")
+		(comment 1 "Six axes, or four and three relays; Ethernet, spindle sensor, opto-isolated inputs")
 		(comment 2 "Drawn by gen/gen_sch.py from gen/design.py - change it there")
 	)
 	(lib_symbols
@@ -921,8 +921,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "7f738b69-8571-5198-ac02-cbad0e973caf")
-		(property "Reference" "R33" (at 79.2 40.71 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "6a235b15-fd51-59cf-82b7-9d035b07c750")
+		(property "Reference" "R37" (at 79.2 40.71 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "1k" (at 79.2 43.21 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 76.2 41.91 0)
@@ -931,12 +931,12 @@
 		)
 		(property "Datasheet" "" (at 76.2 41.91 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 76.2 41.91 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "fc813d13-9e08-51f6-a3aa-7a6366f41d70"))
-		(pin "2" (uuid "6e2bfc81-9070-544b-a510-ee9994a65e61"))
+		(pin "1" (uuid "af6c3aca-6afb-5e26-af7a-2885b0ce7c4b"))
+		(pin "2" (uuid "f4b7ca36-051d-5909-8b70-7be16c490916"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "R33")
+					(reference "R37")
 					(unit 1)
 				)
 			)
@@ -1015,7 +1015,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "11ddf6b1-8efc-5405-8e81-6e2a10659098")
-		(property "Reference" "#PWR601" (at 99.06 38.1 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR801" (at 99.06 38.1 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "+5V" (at 99.06 34.4 0) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 99.06 38.1 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 99.06 38.1 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1024,7 +1024,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR601")
+					(reference "#PWR801")
 					(unit 1)
 				)
 			)
@@ -1078,7 +1078,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "730acb36-4958-547a-8d22-16c313c3f614")
-		(property "Reference" "#PWR602" (at 116.84 66.04 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR802" (at 116.84 66.04 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 116.84 69.94 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 116.84 66.04 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 116.84 66.04 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1087,7 +1087,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR602")
+					(reference "#PWR802")
 					(unit 1)
 				)
 			)
@@ -1146,7 +1146,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "5b1c8b89-940f-5124-85b8-451648ee4de6")
-		(property "Reference" "#PWR603" (at 88.9 68.58 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR803" (at 88.9 68.58 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 88.9 72.48 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 88.9 68.58 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 88.9 68.58 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1155,7 +1155,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR603")
+					(reference "#PWR803")
 					(unit 1)
 				)
 			)
@@ -1271,8 +1271,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "20967955-9279-579d-8235-f735a0a99b86")
-		(property "Reference" "R34" (at 79.2 83.89 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "a152d565-342d-547d-949e-67f66ab629d2")
+		(property "Reference" "R39" (at 79.2 83.89 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "1k" (at 79.2 86.39 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 76.2 85.09 0)
@@ -1281,12 +1281,12 @@
 		)
 		(property "Datasheet" "" (at 76.2 85.09 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 76.2 85.09 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "ca51281b-60da-5916-b018-cf98932ff630"))
-		(pin "2" (uuid "6d31dc47-c3ab-5e82-91f8-d065f9d89cb2"))
+		(pin "1" (uuid "54949df0-4264-5340-9aa7-2fa4e24ea26f"))
+		(pin "2" (uuid "0bde55d0-eccc-5030-98f9-fca548603646"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "R34")
+					(reference "R39")
 					(unit 1)
 				)
 			)
@@ -1365,7 +1365,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "1a32627d-4626-541b-85c5-fa1fa856b80c")
-		(property "Reference" "#PWR604" (at 99.06 81.28 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR804" (at 99.06 81.28 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "+5V" (at 99.06 77.58 0) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 99.06 81.28 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 99.06 81.28 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1374,7 +1374,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR604")
+					(reference "#PWR804")
 					(unit 1)
 				)
 			)
@@ -1428,7 +1428,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "8c928e95-6139-5de7-8320-35b95fb0e267")
-		(property "Reference" "#PWR605" (at 116.84 109.22 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR805" (at 116.84 109.22 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 116.84 113.12 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 116.84 109.22 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 116.84 109.22 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1437,7 +1437,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR605")
+					(reference "#PWR805")
 					(unit 1)
 				)
 			)
@@ -1464,8 +1464,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "6a235b15-fd51-59cf-82b7-9d035b07c750")
-		(property "Reference" "R37" (at 91.9 106.75 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "61a9687e-c32e-5cd4-8f47-3a5c96f4e4a1")
+		(property "Reference" "R38" (at 91.9 106.75 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "10k" (at 91.9 109.25 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 88.9 107.95 0)
@@ -1474,12 +1474,12 @@
 		)
 		(property "Datasheet" "" (at 88.9 107.95 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 88.9 107.95 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "af6c3aca-6afb-5e26-af7a-2885b0ce7c4b"))
-		(pin "2" (uuid "f4b7ca36-051d-5909-8b70-7be16c490916"))
+		(pin "1" (uuid "211bd502-1f44-5ee8-8211-02bf50e21e79"))
+		(pin "2" (uuid "8072cd6d-a0d9-51ca-a11a-1a5daf7f4b97"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "R37")
+					(reference "R38")
 					(unit 1)
 				)
 			)
@@ -1496,7 +1496,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "40e0aad0-ee84-5854-96a4-352e86cf579a")
-		(property "Reference" "#PWR606" (at 88.9 111.76 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR806" (at 88.9 111.76 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 88.9 115.66 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 88.9 111.76 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 88.9 111.76 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1505,7 +1505,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR606")
+					(reference "#PWR806")
 					(unit 1)
 				)
 			)
@@ -1621,8 +1621,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "ce772fd6-971b-5689-9c67-e520d7f524f7")
-		(property "Reference" "R35" (at 79.2 127.07 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "3d6fccd1-aaf7-54f7-a637-506cbf9ae2e1")
+		(property "Reference" "R41" (at 79.2 127.07 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "1k" (at 79.2 129.57 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 76.2 128.27 0)
@@ -1631,12 +1631,12 @@
 		)
 		(property "Datasheet" "" (at 76.2 128.27 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 76.2 128.27 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "2a115074-eca8-5a12-b217-1fee710333c7"))
-		(pin "2" (uuid "aa1ac93a-ccb2-5b60-857a-264ab5311d5e"))
+		(pin "1" (uuid "0210aa39-d2c6-5008-a2c2-af5a0cdf1087"))
+		(pin "2" (uuid "a8f8dd33-9386-5756-9d84-3ce321bef0c6"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "R35")
+					(reference "R41")
 					(unit 1)
 				)
 			)
@@ -1715,7 +1715,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "d2925c48-7e31-566b-83d4-51dd152863fd")
-		(property "Reference" "#PWR607" (at 99.06 124.46 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR807" (at 99.06 124.46 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "+5V" (at 99.06 120.76 0) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 99.06 124.46 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 99.06 124.46 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1724,7 +1724,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR607")
+					(reference "#PWR807")
 					(unit 1)
 				)
 			)
@@ -1778,7 +1778,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "7e52c874-72be-52cf-8376-35ca6142010e")
-		(property "Reference" "#PWR608" (at 116.84 152.4 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR808" (at 116.84 152.4 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 116.84 156.3 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 116.84 152.4 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 116.84 152.4 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1787,7 +1787,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR608")
+					(reference "#PWR808")
 					(unit 1)
 				)
 			)
@@ -1814,8 +1814,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "61a9687e-c32e-5cd4-8f47-3a5c96f4e4a1")
-		(property "Reference" "R38" (at 91.9 149.93 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "f04cdeee-f91f-5d0e-9a5e-0d1a73f16595")
+		(property "Reference" "R40" (at 91.9 149.93 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "10k" (at 91.9 152.43 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 88.9 151.13 0)
@@ -1824,12 +1824,12 @@
 		)
 		(property "Datasheet" "" (at 88.9 151.13 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 88.9 151.13 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "211bd502-1f44-5ee8-8211-02bf50e21e79"))
-		(pin "2" (uuid "8072cd6d-a0d9-51ca-a11a-1a5daf7f4b97"))
+		(pin "1" (uuid "64f62d28-2773-50e7-a936-0592ce9aba4b"))
+		(pin "2" (uuid "fa3acd8d-c31e-5ada-86aa-952ff174a24f"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "R38")
+					(reference "R40")
 					(unit 1)
 				)
 			)
@@ -1846,7 +1846,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "a399077c-02fe-5be7-a673-510b3bdc3359")
-		(property "Reference" "#PWR609" (at 88.9 154.94 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR809" (at 88.9 154.94 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 88.9 158.84 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 88.9 154.94 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 88.9 154.94 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1855,7 +1855,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR609")
+					(reference "#PWR809")
 					(unit 1)
 				)
 			)
@@ -1937,7 +1937,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "17bc3860-60b4-5465-b421-4fab208b911f")
-		(property "Reference" "#PWR610" (at 218.44 50.8 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR810" (at 218.44 50.8 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "+5V" (at 218.44 47.1 0) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 218.44 50.8 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 218.44 50.8 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -1946,7 +1946,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR610")
+					(reference "#PWR810")
 					(unit 1)
 				)
 			)
@@ -1962,8 +1962,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "23a1933f-08e8-53f0-9f3f-0dbe2fb61dc8")
-		(property "Reference" "C15" (at 221.44 55.95 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "654cab8b-ef90-5511-a3d5-b026a601431c")
+		(property "Reference" "C16" (at 221.44 55.95 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "10u" (at 221.44 58.45 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric"
 			(at 218.44 57.15 0)
@@ -1972,12 +1972,12 @@
 		)
 		(property "Datasheet" "" (at 218.44 57.15 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 218.44 57.15 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "56acb166-b62c-5efd-a02e-ce2079ff57fa"))
-		(pin "2" (uuid "083d5f97-4c9e-59be-8426-f58518993aea"))
+		(pin "1" (uuid "682c7fe8-b292-56d8-9ea4-98d81c5654dc"))
+		(pin "2" (uuid "7d2bea42-9959-5e94-8f0b-b2772bc65748"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "C15")
+					(reference "C16")
 					(unit 1)
 				)
 			)
@@ -1994,7 +1994,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "d5d4fffd-44b8-5b67-9567-07d2d1ad3d97")
-		(property "Reference" "#PWR611" (at 218.44 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR811" (at 218.44 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 218.44 64.86 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 218.44 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 218.44 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -2003,7 +2003,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR611")
+					(reference "#PWR811")
 					(unit 1)
 				)
 			)
@@ -2019,8 +2019,8 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "654cab8b-ef90-5511-a3d5-b026a601431c")
-		(property "Reference" "C16" (at 236.68 55.95 0) (effects (font (size 1.27 1.27)) (justify left)))
+		(uuid "9ea043b2-1d76-5826-9ace-b15678319493")
+		(property "Reference" "C17" (at 236.68 55.95 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Value" "100n" (at 236.68 58.45 0) (effects (font (size 1.27 1.27)) (justify left)))
 		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
 			(at 233.68 57.15 0)
@@ -2029,12 +2029,12 @@
 		)
 		(property "Datasheet" "" (at 233.68 57.15 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Description" "" (at 233.68 57.15 0) (hide yes) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "682c7fe8-b292-56d8-9ea4-98d81c5654dc"))
-		(pin "2" (uuid "7d2bea42-9959-5e94-8f0b-b2772bc65748"))
+		(pin "1" (uuid "1d86bed2-4376-5a65-9d90-25daa0a42ee7"))
+		(pin "2" (uuid "b20eb955-0cc9-5596-ac75-7cbd764acd4e"))
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "C16")
+					(reference "C17")
 					(unit 1)
 				)
 			)
@@ -2051,7 +2051,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "9d7e67a7-9a2b-5040-8db9-73662e960943")
-		(property "Reference" "#PWR612" (at 233.68 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#PWR812" (at 233.68 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Value" "GND" (at 233.68 64.86 0) (hide yes) (effects (font (size 1.1 1.1))))
 		(property "Footprint" "" (at 233.68 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
 		(property "Datasheet" "" (at 233.68 60.96 0) (hide yes) (effects (font (size 1.27 1.27))))
@@ -2060,7 +2060,7 @@
 		(instances
 			(project "tiggy-devkitc-carrier"
 				(path "/89bf425d-c224-58f0-ab76-f03393246ef6/321dd13f-c382-5229-a291-63ea17bb2c15"
-					(reference "#PWR612")
+					(reference "#PWR812")
 					(unit 1)
 				)
 			)
@@ -2090,7 +2090,7 @@
 		(effects (font (size 3 3) (bold yes)) (justify left bottom))
 		(uuid "83b18c76-5c6d-5262-883b-da2dfda013ac")
 	)
-	(text "Three relays on the auxiliary outputs 1 to 3, each with a lamp."
+	(text "Three relays on the auxiliary outputs 1 to 3, each with a lamp.  With four axes only: page \"Drives B, C\"."
 		(exclude_from_sim no)
 		(at 15 22 0)
 		(effects (font (size 1.5 1.5)) (justify left bottom))
