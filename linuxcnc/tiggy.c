@@ -209,6 +209,7 @@ typedef struct {                        /* one servo period of commanded positio
     double   revs;                      /* the spindle LinuxCNC was shown this period (tiggy.spindle-revs) */
     float    rps;                       /* ...and how fast it was turning, revolutions a second */
     uint32_t sync_run;                  /* counts the times LinuxCNC has begun a move at the index */
+    uint8_t  traverse;                  /* LinuxCNC is making a rapid move (tiggy.motion-type is 1) */
 } tg_sample_t;
 
 static struct { volatile uint32_t seq; tg_wanted_t v; }    sh_wanted;
@@ -288,6 +289,7 @@ typedef struct {
     hal_float_t *spindle_speed, *spindle_rps, *spindle_rpm;
     hal_float_t *spindle_revs;          /* out: for spindle.N.revs */
     hal_bit_t   *spindle_index_enable;  /* io:  for spindle.N.index-enable */
+    hal_s32_t   *motion_type;           /* in:  motion.motion-type: 1 while LinuxCNC makes a rapid move */
     hal_u32_t   *spindle_turns;         /* out: the controller's own reading of its sensor: turns counted... */
     hal_float_t *spindle_angle;         /* ...and how far round the turn it is, 0 to 1 */
     hal_float_t *buffer_ms;
@@ -578,6 +580,7 @@ static void tg_write(void *arg, long period)
             s.revs = rt_revs;
             s.rps = (float)rt_rps_shown;
             s.sync_run = rt_sync_run;
+            s.traverse = *h->motion_type == 1;
             samples[head & (SAMPLE_RING - 1)] = s;
             tg_barrier();
             smp_head = head + 1;
@@ -1423,8 +1426,8 @@ static void take_samples(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t 
             if (s.sync_run != m->sync_run) {
                 /* LinuxCNC begins a move in step with the spindle with this
                  * period.  What came before is a segment of its own; from
-                 * here on, until the machine next stands still, everything
-                 * is played by the spindle. */
+                 * here on, until LinuxCNC goes on to a rapid move or the
+                 * machine stands still, everything is played by the spindle. */
                 if (m->seg_ns) close_segment(L, m, w, now);
                 if (m->state != M_RUN) break;
                 double mrpm = (double)s.rps * 60000.0;
@@ -1452,6 +1455,17 @@ static void take_samples(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t 
                 m->t_sync = now;
                 m->vtrim = 0.0;
                 m->force_move = 1;              /* the index is waited for even if the first segment is short */
+            } else if (m->sync && s.traverse && !m->index_pending) {
+                /* The thread is cut, and LinuxCNC has gone on to a rapid
+                 * move: out of the thread, back to the start, in for the
+                 * next pass.  That is played by the clock like any other
+                 * move.  (Played by the spindle it would be held to the step
+                 * rate the controller can make while it follows a spindle,
+                 * which is less than a rapid may ask - and a pass that falls
+                 * behind the spindle is abandoned.) */
+                if (m->seg_ns) close_segment(L, m, w, now);
+                if (m->state != M_RUN) break;
+                m->sync = 0;
             }
             if (memcmp(s.target, m->last, sizeof(m->last)) != 0) m->seg_moving = 1;
         }
@@ -1958,6 +1972,7 @@ static int export_pins(tg_hal_t *h)
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_rpm, comp_id, COMP ".spindle-speed-fb-rpm"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_revs, comp_id, COMP ".spindle-revs"));
     CHECK(hal_pin_bit_newf(HAL_IO, &h->spindle_index_enable, comp_id, COMP ".spindle-index-enable"));
+    CHECK(hal_pin_s32_newf(HAL_IN, &h->motion_type, comp_id, COMP ".motion-type"));
     CHECK(hal_pin_u32_newf(HAL_OUT, &h->spindle_turns, comp_id, COMP ".spindle-turns"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_angle, comp_id, COMP ".spindle-angle"));
     CHECK(hal_pin_bit_newf(HAL_IN, &h->flood, comp_id, COMP ".coolant-flood"));

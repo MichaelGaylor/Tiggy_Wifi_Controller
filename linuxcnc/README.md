@@ -122,10 +122,17 @@ later. In practice:
     grows with the speed, and with it moves the place where the thread
     begins.  (What the speed does once the pass is under way does not
     matter.)
-  - From the start of a pass until the machine next stands still, everything
-    is played by the spindle - the way out and back as well.  If LinuxCNC
-    switches the spindle off straight after, it is kept running for the
-    quarter second until that motion has been played.
+  - The thread itself is played by the spindle: from the start of a pass
+    until LinuxCNC goes on to a rapid move (it says so on
+    `motion.motion-type`, which the set-up connects to the driver) or the
+    machine stands still.  The rapid moves out of the thread, back and in
+    for the next pass go by the clock like any other move, at whatever
+    speed the axes have.  If LinuxCNC switches the spindle off straight
+    after a pass, it is kept running for the quarter second until the pass
+    has been played.
+  - While it follows the spindle the controller makes fewer steps a second
+    than otherwise: keep the feed of the thread itself (pitch x spindle
+    speed x steps per unit) under about 20,000 steps a second.
   - If a pass cannot be kept in step (the PC or the network stalls in the
     middle of it), the controller stops and abandons it rather than cut
     across the thread, and LinuxCNC is stopped with the reason.
@@ -175,6 +182,7 @@ Loaded with `loadrt tiggy ip=<address or auto> joints=<1-6> [io_ip=<address or a
 | `tiggy.spindle-speed-fb`, `-fb-rpm` | float out | spindle encoder, rev/s and rpm |
 | `tiggy.spindle-revs` | float out | for `spindle.0.revs`: the copy of the spindle LinuxCNC follows in G33 and G76 |
 | `tiggy.spindle-index-enable` | bit io | for `spindle.0.index-enable` |
+| `tiggy.motion-type` | s32 in | from `motion.motion-type`: a move in step with the spindle ends when LinuxCNC goes on to a rapid move (1). Left unconnected, it ends when the machine next stands still |
 | `tiggy.spindle-turns`, `tiggy.spindle-angle` | u32, float out | the controller's own reading of its spindle sensor: turns counted, and how far round the turn it is (0 to 1). They come from the same status report as the joints' `counts`: for checking a sensor, or how a thread lies on the spindle |
 | `tiggy.coolant-flood`, `-mist` | bit in | coolant |
 | `tiggy.buffer-ms` | float out | motion queued at this moment |

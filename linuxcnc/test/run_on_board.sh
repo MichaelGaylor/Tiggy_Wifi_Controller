@@ -94,9 +94,11 @@ export TIGGY_TEST_MINUTES="$MINUTES"
 rm -f "$HOME/linuxcnc_debug.txt" "$HOME/linuxcnc_print.txt"
 echo "=== LinuxCNC against the controller at $ADDRESS ==="
 code=0
+# No screen for it either: on a desktop a LinuxCNC that ends with an error would put up a
+# window and wait for it to be closed.
 # -r: without a terminal LinuxCNC would otherwise put its output in
 # temporary files and delete them
-timeout $((900 + ${MINUTES%.*} * 120)) linuxcnc -r "$ini" > "$WORK/linuxcnc.log" 2>&1 || code=$?
+timeout $((900 + ${MINUTES%.*} * 120)) env -u DISPLAY -u WAYLAND_DISPLAY linuxcnc -r "$ini" > "$WORK/linuxcnc.log" 2>&1 || code=$?
 
 echo
 cat "$TIGGY_TEST_RESULT" 2>/dev/null || echo "LinuxCNC produced no results"

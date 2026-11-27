@@ -9,9 +9,10 @@ it back afterwards.
 prepare sets the spindle sensor to one pulse per revolution and exchanges the
 X step and spindle terminals in the controller's settings, so that a wire
 from the X step terminal to the sensor's terminal carries the spindle PWM to
-the sensor: a spindle that turns when LinuxCNC switches the spindle on.  What
-was set before is kept in <file>; restore puts it back.  The controller
-restarts each time.
+the sensor: a spindle that turns when LinuxCNC switches the spindle on.  The
+PWM is set to the 53 Hz of the test as well, so that the controller starts
+with it.  What was set before is kept in <file>; restore puts it back.  The
+controller restarts each time.
 """
 
 import json
@@ -20,9 +21,10 @@ import sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
-from spindle_loopback_test import Board, NAME, PIN_INDEX, PIN_SPINDLE, PIN_STEP_X, SENSOR_MODE, SENSOR_PPR  # noqa: E402
+from spindle_loopback_test import (Board, NAME, PIN_INDEX, PIN_SPINDLE, PIN_STEP_X, PWM_HZ, PWM_ON,  # noqa: E402
+                                   SENSOR_MODE, SENSOR_PPR)
 
-KEYS = (SENSOR_MODE, SENSOR_PPR, PIN_STEP_X, PIN_SPINDLE)
+KEYS = (SENSOR_MODE, SENSOR_PPR, PIN_STEP_X, PIN_SPINDLE, PWM_ON, PWM_HZ)
 
 
 def main():
@@ -37,7 +39,7 @@ def main():
             sys.exit("This controller has no spindle output to stand in for a spindle.")
         with open(path, "w") as f:
             json.dump({str(k): v for k, v in was.items()}, f)
-        board.write({SENSOR_MODE: 1, SENSOR_PPR: 1, PIN_STEP_X: spindle, PIN_SPINDLE: step})
+        board.write({SENSOR_MODE: 1, SENSOR_PPR: 1, PIN_STEP_X: spindle, PIN_SPINDLE: step, PWM_ON: 1, PWM_HZ: 53})
         print("The controller's spindle output is now on GPIO %d and its sensor input on GPIO %d: "
               "these two are to be linked." % (step, board.c.cfg_get(PIN_INDEX)))
     else:

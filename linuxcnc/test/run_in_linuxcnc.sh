@@ -41,11 +41,13 @@ run_plan() {    # name of the plan, folder of its configuration, [options for th
     SIM_PID=$!
     sleep 2
     echo "=== LinuxCNC: $1 ==="
+    # No screen for it either: on a desktop a LinuxCNC that ends with an error would put up a
+    # window and wait for it to be closed.
     # -r: without a terminal LinuxCNC would otherwise put its output in
     # temporary files and delete them
     local code=0
     rm -f "$HOME/linuxcnc_debug.txt" "$HOME/linuxcnc_print.txt"
-    TIGGY_TEST_PLAN="$1" TIGGY_TEST_OUTPUTS="${4:-0,1,2}" timeout 900 linuxcnc -r "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || code=$?
+    TIGGY_TEST_PLAN="$1" TIGGY_TEST_OUTPUTS="${4:-0,1,2}" timeout 900 env -u DISPLAY -u WAYLAND_DISPLAY linuxcnc -r "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || code=$?
     kill "$SIM_PID" 2>/dev/null || true
     wait "$SIM_PID" 2>/dev/null || true
     SIM_PID=""

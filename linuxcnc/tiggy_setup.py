@@ -518,6 +518,8 @@ def write_hal(m, path):
         w("net spindle-revs         tiggy.spindle-revs         => spindle.0.revs")
         w("net spindle-speed-in     tiggy.spindle-speed-fb     => spindle.0.speed-in")
         w("net spindle-index-enable tiggy.spindle-index-enable <=> spindle.0.index-enable")
+        w("# ...the thread itself, that is: the rapid moves between passes go by the clock again")
+        w("net motion-type          motion.motion-type         => tiggy.motion-type")
     w("net coolant-flood iocontrol.0.coolant-flood => tiggy.coolant-flood")
     w("net coolant-mist  iocontrol.0.coolant-mist  => tiggy.coolant-mist")
     w("")

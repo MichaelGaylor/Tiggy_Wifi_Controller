@@ -382,6 +382,10 @@ class Session:
             part = [(z, t) for z, t in seen[a:b] if 0.25 * length < top - z < 0.9 * length]
             check(len(part) > 10, "only %d readings in a pass" % len(part))
             res = [z + per_rev * t for z, t in part]
+            # (A report made in the instant the spindle passes its index can count the turn before
+            # the angle has gone round, or after: that reading is a whole turn out, and is put back.)
+            mid = sorted(res)[len(res) // 2]
+            res = [mid + (r - mid + per_rev / 2.0) % per_rev - per_rev / 2.0 for r in res]
             out.append((len(part), max(res) - min(res), (sum(res) / len(res)) % per_rev))
         return out
 
