@@ -161,6 +161,8 @@ python tools/grbl_serial_test.py COM14                # the G-code interface on 
 python tools/grbl_serial_test.py <ip>                 # the same interface over the network (telnet, port 23)
 python tools/ugs_serial_test.py COM14                 # TiggyUGS's own serial connection and sender against it (needs TiggyUGS's source)
 python tools/latency_test.py <ip>                     # how promptly the controller answers over the network: median and worst case
+linuxcnc/test/run_on_board.sh <ip> --motion           # LinuxCNC itself driving the board (on Linux, or in Windows under WSL): homing, MDI,
+                                                      # a program, jogging, abort, E-stop and a long run, each checked to the step
 ```
 
 With one wire on it - X step linked to the single spindle sensor's terminal, GPIO 1 to GPIO 21 on the DevKitC - the board tests its own step output, its spindle sensor input and screw cutting:

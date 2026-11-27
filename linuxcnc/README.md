@@ -190,3 +190,14 @@ Loaded with `loadrt tiggy ip=<address or auto> joints=<1-6> [io_ip=<address or a
 (moves to the step, packet loss, a stalling PC, E-stop, limits, reconnection)
 without needing LinuxCNC; `linuxcnc/test/run_in_linuxcnc.sh` does the same
 inside a real LinuxCNC.
+
+With a controller on the bench, `linuxcnc/test/run_on_board.sh <address> --motion`
+has LinuxCNC drive it without a screen - homing, MDI, a program, jogging,
+abort, E-stop, some minutes of fast moves - and compares LinuxCNC's position
+with the controller's own step count after each.  (These test programs are
+in the source tree, not in the download.)
+
+LinuxCNC and this driver also run inside Windows, under WSL with Debian 13:
+the controller makes the step pulses, so the computer needs no realtime
+kernel.  WSL is behind Windows' network, where `ADDRESS = auto` does not
+reach: give the controller's address.
