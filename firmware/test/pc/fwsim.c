@@ -64,13 +64,20 @@ static struct {
  * index pulse, or a single pulse sensor.  The sensor's signals go to the
  * firmware's spindle tracking exactly as the hardware would deliver them:
  * the count sampled every SPT_SAMPLE_US, pulses with the time they were
- * noticed (a few microseconds late, as an interrupt would be). */
+ * noticed (a few microseconds late, as an interrupt would be).
+ *
+ * The encoder is the one the settings describe - unless a test has fitted
+ * one of its own (fws_fit): then the settings only say what the controller
+ * takes it for, as with a real encoder and a wrong number typed in. */
 #define SPIN_STEP_US    50u
 
 static struct {
     int      mode;              /* SPT_* */
     int      ppr;               /* encoder lines, or pulses, per revolution */
     bool     index;             /* quadrature: with an index pulse */
+    int      lines;             /* quadrature: the lines the encoder really has */
+    bool     pulse_wired;       /* quadrature: its index pulse reaches the controller */
+    bool     b_open;            /* quadrature: its B signal does not */
     double   index_at;          /* where in the revolution the index (or first pulse) is */
     double   turns;             /* true angle at 'at', revolutions */
     double   rate;              /* revolutions per microsecond from 'at' on */
@@ -89,9 +96,20 @@ static struct {
 static struct { double t, turns; int32_t pos; } s_trace[TRACE_MAX];
 static int s_trace_n = 0, s_trace_axis = -1;
 
+/* Fitted by a test (fws_fit); lines 0: the encoder is as the settings say */
+static struct { int lines; bool index, b_open, was_wired; } s_fit;
+
 static double spin_turns_now(void)
 {
     return sp.turns + sp.rate * ((double)pc_now_us - (double)sp.at);
+}
+
+/* What the pulse counter holds.  With only A connected its edges count one
+ * way and back again: the count never gets anywhere. */
+static int64_t spin_count(void)
+{
+    if (sp.b_open) return (int64_t)floor(sp.turns * 2.0 * sp.lines) & 1;
+    return (int64_t)floor(sp.turns * 4.0 * sp.lines);
 }
 
 /* When a pulse that came us_into_step into the step being made is noticed:
@@ -112,7 +130,7 @@ static void spin_step(void)
         double a = (before - sp.index_at) * sp.ppr, b = (after - sp.index_at) * sp.ppr;
         for (double k = floor(a) + 1.0; k <= b; k += 1.0)
             spt_pulse(spin_noticed((k - a) / (b - a) * SPIN_STEP_US));
-    } else if (sp.mode == SPT_QUADRATURE && sp.index) {
+    } else if (sp.mode == SPT_QUADRATURE && sp.index && sp.pulse_wired) {
         double a = before - sp.index_at, b = after - sp.index_at;
         if (floor(a) != floor(b)) {
             double edge = b > a ? floor(b) : floor(a);
@@ -125,7 +143,7 @@ static void spin_step(void)
     if (sp.at >= sp.next_sample) {
         sp.next_sample += SPT_SAMPLE_US;
         if (sp.mode == SPT_QUADRATURE) {
-            int64_t c = (int64_t)floor(sp.turns * 4.0 * sp.ppr);
+            int64_t c = spin_count();
             spt_counts(sp.at, (int32_t)(c - sp.counts));
             sp.counts = c;
         } else {
@@ -148,7 +166,10 @@ static void spin_sensor(int mode, int ppr, int index)
     sp.mode = ppr > 0 ? mode : SPT_NONE;
     sp.ppr = ppr;
     sp.index = index != 0;
-    sp.counts = (int64_t)floor(sp.turns * 4.0 * ppr);
+    sp.lines = s_fit.lines ? s_fit.lines : ppr;
+    sp.pulse_wired = s_fit.lines ? s_fit.index : true;
+    sp.b_open = s_fit.lines ? s_fit.b_open : false;
+    sp.counts = spin_count();
     m.encoder_ppr = sp.mode == SPT_NONE ? 0 : ppr;
     spt_setup((spt_mode_t)sp.mode, sp.mode == SPT_QUADRATURE ? 4u * (uint32_t)ppr : (uint32_t)ppr, sp.index);
 }
@@ -480,6 +501,7 @@ EXPORT void fws_init(int io_module, int encoder_ppr, uint32_t fw_version)
     s_out_head = s_out_tail = 0;
     s_leg_head = s_leg_tail = 0;
     memset(&sp, 0, sizeof(sp));
+    memset(&s_fit, 0, sizeof(s_fit));
     sp.at = pc_now_us;
     sp.next_sample = sp.at + SPT_SAMPLE_US;
     sp.follow = true;
@@ -539,6 +561,21 @@ EXPORT void fws_encoder(int mode, int ppr, int index)
     s_sensor_wired = ppr > 0;
     cfg_find(WCNC_CFG_ENCODER_PPR)->u = (uint32_t)ppr;
     cfg_find(WCNC_CFG_ENCODER_MODE)->u = mode == 2 ? 1u : (index ? 0u : 2u);
+    apply_layout();
+}
+
+/* A quadrature encoder of 'lines' lines on the spindle, whatever the
+ * settings say: with an index pulse or not, and (b_open) with its B signal
+ * not reaching the controller.  Its terminals are those of the four-axis
+ * layout, so the controller reads it once it is set up for an encoder there.
+ * lines 0: back to an encoder that is what the settings say. */
+EXPORT void fws_fit(int lines, int index, int b_open)
+{
+    if (!s_fit.lines) s_fit.was_wired = s_sensor_wired;
+    s_fit.lines = lines > 0 ? lines : 0;
+    s_fit.index = index != 0;
+    s_fit.b_open = b_open != 0;
+    s_sensor_wired = s_fit.lines ? false : s_fit.was_wired;
     apply_layout();
 }
 

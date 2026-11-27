@@ -293,6 +293,69 @@ def step_output(board, test):
 
 # ====================================================================== part 2
 
+def play_segments(c, st, segs, events=(), timeout=60.0):
+    """Stream segs to the end.  events: (seconds after the first Z step, function).
+    Returns the position it began at and the reports made meanwhile."""
+    start = len(c.log)
+    p0 = c.pump(0.05)["pos"]
+    todo = sorted(events, key=lambda e: e[0])
+    began = [None]
+
+    def tick(s):
+        if began[0] is None and s["pos"][2] != p0[2]:
+            began[0] = time.perf_counter()
+        while todo and began[0] is not None and time.perf_counter() - began[0] >= todo[0][0]:
+            todo.pop(0)[1]()
+        return False
+
+    c.stream(st, segs, timeout=timeout, until=tick)
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        s = c.pump(0.005)
+        tick(s)
+        if s["state"] == IDLE and s["queued_ms"] == 0 and s["next_seg"] == (len(segs) & 0xFFFF):
+            break
+    else:
+        raise AssertionError("did not finish: %s" % c.status)
+    return p0, c.log[start:]
+
+
+def pass_on_spindle(p0, reports, p, label, segs=None, verbose=False):
+    """How a pass lay on the spindle (see the top of the file).
+    segs: (first, last + 1) segment numbers of the pass, if the reports hold more than one.
+    A report may bring the spindle's angle with it ('turns'); otherwise it is the turns
+    counted and the angle reported."""
+    pts = []
+    for s in reports:
+        z = (p0[2] - s["pos"][2]) * (1 if p.direction < 0 else -1)
+        if segs and not (segs[0] <= s["seg"] < segs[1]):
+            continue
+        if s["sflags"] & SF_SYNC and 0 < z < p.length:
+            turns = s["turns"] if "turns" in s else s["index_count"] + s["spindle_pos"] / 65536.0
+            lo, hi = p.turns_at_step(z), p.turns_at_step(z + 1)        # the report was made between two steps
+            pts.append((s["up"], z, turns, 0.5 * (lo + hi), 0.5 * (hi - lo), s["rpm"]))
+    assert len(pts) > 20, "%s: only %d reports while in step with the spindle" % (label, len(pts))
+    whole = round(median(t - plan for _u, _z, t, plan, _q, _r in pts))      # the turn the pass began at
+    res = [(u, z, fold(t - plan - whole), q, rpm) for u, z, t, plan, q, rpm in pts]
+    mid = [r for r in res if p.length * 0.25 < r[1] < p.length * 0.75]
+    offset = median(r[2] for r in mid)
+    out = max(max(0.0, abs(r[2] - offset) - r[3]) for r in res)
+    rate = (mid[-1][1] - mid[0][1]) * 1000.0 / max(1, mid[-1][0] - mid[0][0])
+    rpm = median(r[4] for r in mid)
+    if verbose:
+        step = max(1, len(res) // 14)
+        print("      %s: %d reports; from the offset, degrees (band): %s" % (
+            label, len(res), " ".join("%+.1f(%.1f)" % (360 * (r[2] - offset), 360 * r[3]) for r in res[::step])))
+    return dict(offset=offset, out=out, rate=rate, rpm=rpm, res=res, n=len(res), us=offset * 60e6 / rpm if rpm else 0.0)
+
+
+def ended_clean(c, p0):
+    s = c.pump(0.2)
+    assert s["pos"] == p0, "ended at %s, began at %s" % (s["pos"][:3], p0[:3])
+    assert c.sflags_seen & SF_SYNC, "never reported playing by the spindle"
+    assert not (c.sflags_seen & (SF_UNDERRUN | SF_SYNC_LOST)), "stream flags seen: %02X" % c.sflags_seen
+
+
 def screw_cutting(c, info, test, sim, verbose):
     stream_no = [120]
     turning = dict(hz=50, on=False)
@@ -335,61 +398,13 @@ def screw_cutting(c, info, test, sim, verbose):
         return ramp_move([0, 0, p.length, 0, 0, 0], max(4.5, p.length / (0.5 * info["max_rate"])))
 
     def play(st, segs, events=(), timeout=60.0):
-        """Stream segs to the end.  events: (seconds after the first Z step, function).  Returns the reports."""
-        start = len(c.log)
-        p0 = c.pump(0.05)["pos"]
-        todo = sorted(events, key=lambda e: e[0])
-        began = [None]
-
-        def tick(s):
-            if began[0] is None and s["pos"][2] != p0[2]:
-                began[0] = time.perf_counter()
-            while todo and began[0] is not None and time.perf_counter() - began[0] >= todo[0][0]:
-                todo.pop(0)[1]()
-            return False
-
-        c.stream(st, segs, timeout=timeout, until=tick)
-        end = time.perf_counter() + timeout
-        while time.perf_counter() < end:
-            s = c.pump(0.005)
-            tick(s)
-            if s["state"] == IDLE and s["queued_ms"] == 0 and s["next_seg"] == (len(segs) & 0xFFFF):
-                break
-        else:
-            raise AssertionError("did not finish: %s" % c.status)
-        return p0, c.log[start:]
+        return play_segments(c, st, segs, events, timeout)
 
     def lock(p0, reports, p, label, segs=None):
-        """How a pass lay on the spindle (see the top of the file).
-        segs: (first, last + 1) segment numbers of the pass, if the reports hold more than one."""
-        pts = []
-        for s in reports:
-            z = (p0[2] - s["pos"][2]) * (1 if p.direction < 0 else -1)
-            if segs and not (segs[0] <= s["seg"] < segs[1]):
-                continue
-            if s["sflags"] & SF_SYNC and 0 < z < p.length:
-                turns = s["index_count"] + s["spindle_pos"] / 65536.0
-                lo, hi = p.turns_at_step(z), p.turns_at_step(z + 1)        # the report was made between two steps
-                pts.append((s["up"], z, turns, 0.5 * (lo + hi), 0.5 * (hi - lo), s["rpm"]))
-        assert len(pts) > 20, "%s: only %d reports while in step with the spindle" % (label, len(pts))
-        whole = round(median(t - plan for _u, _z, t, plan, _q, _r in pts))      # the turn the pass began at
-        res = [(u, z, fold(t - plan - whole), q, rpm) for u, z, t, plan, q, rpm in pts]
-        mid = [r for r in res if p.length * 0.25 < r[1] < p.length * 0.75]
-        offset = median(r[2] for r in mid)
-        out = max(max(0.0, abs(r[2] - offset) - r[3]) for r in res)
-        rate = (mid[-1][1] - mid[0][1]) * 1000.0 / max(1, mid[-1][0] - mid[0][0])
-        rpm = median(r[4] for r in mid)
-        if verbose:
-            step = max(1, len(res) // 14)
-            print("      %s: %d reports; from the offset, degrees (band): %s" % (
-                label, len(res), " ".join("%+.1f(%.1f)" % (360 * (r[2] - offset), 360 * r[3]) for r in res[::step])))
-        return dict(offset=offset, out=out, rate=rate, rpm=rpm, res=res, n=len(res), us=offset * 60e6 / rpm if rpm else 0.0)
+        return pass_on_spindle(p0, reports, p, label, segs, verbose)
 
     def clean(p0):
-        s = c.pump(0.2)
-        assert s["pos"] == p0, "ended at %s, began at %s" % (s["pos"][:3], p0[:3])
-        assert c.sflags_seen & SF_SYNC, "never reported playing by the spindle"
-        assert not (c.sflags_seen & (SF_UNDERRUN | SF_SYNC_LOST)), "stream flags seen: %02X" % c.sflags_seen
+        ended_clean(c, p0)
 
     def good(m, what="", out=OUT):
         assert m["out"] <= out, "%sa report %s outside its band" % (what, deg(m["out"]))

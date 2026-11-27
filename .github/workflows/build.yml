@@ -74,6 +74,17 @@ jobs:
           python tools/firmware_selftest.py
           python tools/threading_test.py
 
+      - name: The bench tests, with the simulator for a board
+        run: |
+          python tools/firmware_sim.py --quiet &
+          sleep 3
+          python tools/spindle_loopback_test.py 127.0.0.1 --sim
+          python tools/encoder_bench_test.py 127.0.0.1 --lines 1024 --sim --wait 30
+          # ...and what it says of an encoder that is not what it was told, or not wired rightly
+          python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder lines=1024 --part hand --wait 30 --expect "1024, most likely"
+          python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder index=0 --part hand --wait 30 --expect "no index pulse"
+          python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder b_open=1 --part hand --wait 10 --expect "only one of A and B"
+
   test-linuxcnc-driver:
     name: Test the LinuxCNC driver
     runs-on: ubuntu-latest

@@ -104,7 +104,7 @@ A threading pass is played in step with the spindle or not at all. If something 
 
 Screw cutting is available to both hosts: G32 and G76 in Mach3 Turn through the plugin, G33 and G76 in LinuxCNC through its driver (`linuxcnc/README.md`).
 
-For screw cutting the host streams the threading pass like any other move, marked to be played *by the spindle* and to begin at its index (`WCNC_SEG_FLAG_SPINDLE_SYNC`, `WCNC_SEG_FLAG_INDEX_START` in `protocol/wifi_cnc_protocol.h`). The controller then advances through the move by the angle the spindle really turns, so the pitch does not depend on the spindle holding its speed, a spindle that stalls stops the axes with it, and every pass begins at the same place on the work. The Mach3 plugin does this for G32 and G76 in Mach3 Turn; the LinuxCNC driver does not use it yet.
+For screw cutting the host streams the threading pass like any other move, marked to be played *by the spindle* and to begin at its index (`WCNC_SEG_FLAG_SPINDLE_SYNC`, `WCNC_SEG_FLAG_INDEX_START` in `protocol/wifi_cnc_protocol.h`). The controller then advances through the move by the angle the spindle really turns, so the pitch does not depend on the spindle holding its speed, a spindle that stalls stops the axes with it, and every pass begins at the same place on the work. The Mach3 plugin does this for G32 and G76 in Mach3 Turn, the LinuxCNC driver for G33 and G76.
 
 ### A carrier board for either layout
 
@@ -136,6 +136,7 @@ python tools/firmware_sim.py              # the firmware's motion code as a cont
 python tools/protocol_conformance.py --sim --motion 127.0.0.1    # protocol tests
 python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, older hosts, starved stream, pulse spacing
 python tools/threading_test.py            # screw cutting: every step of a pass against the angle of a simulated spindle
+python tools/encoder_bench_test.py 127.0.0.1 --lines 1024 --sim    # the bench test of a real encoder (below), the simulator turning one
 python tools/ugs_compat_test.py           # TiggyUGS's own connection, planner and sender code against the firmware
                                           # (needs TiggyUGS's source and its Python packages: see the file)
 ```
@@ -174,6 +175,14 @@ python tools/spindle_loopback_test.py <ip> --bench    # counts its own step puls
 ```
 
 It changes settings (the spindle sensor, and which terminal is X step and which the spindle output) and puts them back at the end, so nothing but the wire may be connected to those two terminals. The file says what is measured and how.
+
+A spindle encoder can be tested the same way before it is on a machine: wired to the controller, turned by hand, then spun with a cordless drill on its shaft.
+
+```bash
+python tools/encoder_bench_test.py <ip> --lines 600 --bench    # A, B and the index pulse read by hand, then threading passes by the drill-spun encoder
+```
+
+It says what to do next and beeps each time (`--say`: it speaks), and goes by what the controller sees, so there is no hurry. By hand it checks that A and B are counted both ways and that the index pulse comes once a turn at the same place in the count - which is the number of lines being right; if it is not, it says what the encoder looks like, and it names the wire if one is missing. With the drill it checks that no counts are lost at speed, that a pass lies where it should on the spindle and a second pass on the first, that Z stops with the spindle, and that a pass waits for a spindle at rest. It sets the four-axis terminal layout and the sensor settings and puts them back (`--keep`: leaves them), and steps the passes out on Z: no drive may be connected there. The inputs take 3.3 V and no more - the file says how each kind of encoder output is wired.
 
 ## Documentation
 
