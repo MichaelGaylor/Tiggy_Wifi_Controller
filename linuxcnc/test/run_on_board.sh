@@ -24,6 +24,8 @@
 # terminals change places in the controller's settings, so that the wire
 # carries the spindle PWM: LinuxCNC's M3 then starts a spindle of 3180 rpm
 # that the sensor reads.  The settings are put back at the end.
+# TIGGY_TEST_BUFFER_MS=400 runs it with that much motion queued in the
+# controller instead of 200 ms (for a link that stalls).
 #
 # Exit status 0 when every step passed.
 
@@ -43,7 +45,7 @@ for arg in "$@"; do
     esac
 done
 if [ -z "$ADDRESS" ] || [ -z "$MOTION" ]; then
-    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
 
@@ -74,7 +76,7 @@ if [ -n "$THREADING" ]; then
     python3 "$HERE/board_prepare.py" prepare "$ADDRESS" "$WORK/controller.json" || exit 2
     PREPARED=1
     python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --spindle-sensor --name TiggyBoard --address "$ADDRESS" \
-        --no-toolchange-prompt --dir "$WORK/cfg" > /dev/null || exit 2
+        --no-toolchange-prompt --buffer-ms "${TIGGY_TEST_BUFFER_MS:-200}" --dir "$WORK/cfg" > /dev/null || exit 2
     # The spindle is the PWM signal itself: 53 Hz is 3180 rpm, whatever its duty (half, at S3180)
     sed -i -e "s|^SPINDLE_PWM = .*|SPINDLE_PWM = 1|" -e "s|^SPINDLE_PWM_FREQ = .*|SPINDLE_PWM_FREQ = 53|" \
         -e "s|^SPINDLE_MAX_RPM = .*|SPINDLE_MAX_RPM = 6360|" "$WORK"/cfg/*.ini

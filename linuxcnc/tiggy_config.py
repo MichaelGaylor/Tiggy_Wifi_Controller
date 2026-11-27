@@ -108,6 +108,7 @@ def load_machine(folder):
     m.setdefault("address_fixed", "")
     m.setdefault("lathe", False)
     m.setdefault("diameter", False)
+    m.setdefault("buffer_ms", 200)
     for n, j in enumerate(m["joints"]):
         j.setdefault("output", n)
         s = ini.get("JOINT_%d" % n, {})
@@ -126,6 +127,7 @@ def load_machine(folder):
         m["max_rpm"] = number(t.get("SPINDLE_MAX_RPM"), m["max_rpm"])
         m["pwm_freq"] = int(number(t.get("SPINDLE_PWM_FREQ"), m["pwm_freq"]))
         m["pump"] = int(number(t.get("CHARGE_PUMP_FREQ"), m["pump"]))
+        m["buffer_ms"] = min(400, max(120, int(number(t.get("BUFFER_MS"), m["buffer_ms"]))))
     if m["address"] != "auto":
         m["address_fixed"] = m["address"]
     return m, notes
@@ -369,8 +371,20 @@ class App(tk.Tk):
                   ).grid(row=6, column=0, columnspan=3, sticky="w")
         self.loaders.append(lambda: self.auto.set(self.m["address"] == "auto"))
 
+        queue = ttk.Frame(f)
+        queue.grid(row=7, column=0, columnspan=3, sticky="w", pady=(14, 0))
+        ttk.Label(queue, text="Motion kept queued in the controller:").pack(side="left")
+        self.entry(queue, lambda: self.m["buffer_ms"], lambda v: self.m.update(buffer_ms=v), width=5, kind=int,
+                   low=120, high=400).pack(side="left", padx=6)
+        ttk.Label(queue, text="ms").pack(side="left")
+        ttk.Label(f, style="Hint.TLabel", wraplength=760, justify="left",
+                  text="A late or lost network packet is covered by what is queued; the machine runs that far behind "
+                       "LinuxCNC. 200 suits a good link. Over WiFi a longer stall can still spoil a screw-cutting pass: "
+                       "use 400 for screw cutting over WiFi, or better, the controller's Ethernet."
+                  ).grid(row=8, column=0, columnspan=3, sticky="w")
+
         self.about = ttk.Label(f, text="", justify="left", wraplength=760)
-        self.about.grid(row=7, column=0, columnspan=3, sticky="w", pady=(16, 0))
+        self.about.grid(row=9, column=0, columnspan=3, sticky="w", pady=(16, 0))
         f.columnconfigure(2, weight=1)
 
     def set_address(self, text):
@@ -1052,7 +1066,8 @@ class App(tk.Tk):
         u = "inch" if m["inch"] else "mm"
         lines = ["%s: a %s, in %s" % (m["name"], "lathe" + (" (X as diameter)" if m["diameter"] else "") if m["lathe"]
                                     else "mill or router", "inches" if m["inch"] else "millimetres"),
-                 "Controller: %s" % ("looked for each time LinuxCNC starts" if m["address"] == "auto" else "at " + m["address"]),
+                 "Controller: %s; %d ms of motion queued in it" % (
+                     "looked for each time LinuxCNC starts" if m["address"] == "auto" else "at " + m["address"], m["buffer_ms"]),
                  ""]
         for j in m["joints"]:
             uj = "degree" if j["rotary"] else u

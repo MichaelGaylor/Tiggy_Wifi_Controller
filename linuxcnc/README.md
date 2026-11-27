@@ -136,6 +136,12 @@ later. In practice:
   - If a pass cannot be kept in step (the PC or the network stalls in the
     middle of it), the controller stops and abandons it rather than cut
     across the thread, and LinuxCNC is stopped with the reason.
+  - Over WiFi, give screw cutting 400 ms of queue (`[TIGGY]BUFFER_MS`; the
+    Controller page of the set-up program) - or better, use the controller's
+    Ethernet.  A WiFi link now and then holds a packet back for longer than
+    the 200 ms otherwise queued, and the pass under way is then lost: in a
+    bench test over WiFi that was about one pass in twenty, and with 400 ms
+    queued none in forty.
   - Rigid tapping (G33.1) is not supported: the controller does not follow
     a spindle that reverses.
 

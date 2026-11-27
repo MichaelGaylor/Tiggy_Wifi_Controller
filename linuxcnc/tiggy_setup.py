@@ -228,6 +228,10 @@ def ask_machine(ask):
     if ask.yes("Is there a Tiggy I/O expansion module", False):
         m["io_module"] = ask.text("Its address (auto to search for it)", "auto")
     m["manual_toolchange"] = ask.yes("Show a prompt on screen at tool changes", True)
+    say("  The controller keeps some motion queued, so that a late or lost network packet never")
+    say("  reaches the motors; the machine runs that far behind LinuxCNC.  200 ms suits a good link;")
+    say("  a poor one, or screw cutting over WiFi, wants up to 400.")
+    m["buffer_ms"] = ask.whole("Motion kept queued, milliseconds", 200, 120, 400)
     return m
 
 
@@ -576,7 +580,7 @@ def write_config(m, folder):
     safe = folder_name(m["name"])
     ini = os.path.join(folder, safe + ".ini")
     os.makedirs(folder, exist_ok=True)
-    write_ini(m, ini)
+    write_ini(m, ini, int(m.get("buffer_ms", 200)))
     write_hal(m, os.path.join(folder, "tiggy.hal"))
     postgui = os.path.join(folder, "postgui.hal")
     if not os.path.exists(postgui):             # (the place for the user's own additions: never replaced)
@@ -603,6 +607,7 @@ def main():
     ap.add_argument("--dir", help="folder to write to (default ~/linuxcnc/configs/<name>)")
     ap.add_argument("--no-toolchange-prompt", action="store_true", help="tool changes need no confirmation on screen")
     ap.add_argument("--spindle-sensor", action="store_true", help="with --defaults: wire up screw cutting (G33, G76)")
+    ap.add_argument("--buffer-ms", type=int, help="with --defaults: motion kept queued in the controller, 120 to 400 ms")
     args = ap.parse_args()
 
     global QUIET
@@ -619,6 +624,8 @@ def main():
         m["manual_toolchange"] = False
     if args.spindle_sensor:
         m["threading"] = True
+    if args.buffer_ms:
+        m["buffer_ms"] = min(400, max(120, args.buffer_ms))
 
     safe = folder_name(m["name"])
     folder = args.dir or os.path.join(os.path.expanduser("~"), "linuxcnc", "configs", safe)

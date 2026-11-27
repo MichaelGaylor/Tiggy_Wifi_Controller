@@ -389,13 +389,17 @@ class Session:
             out.append((len(part), max(res) - min(res), (sum(res) / len(res)) % per_rev))
         return out
 
-    def judge(self, found, per_rev, what):
-        worst = max(spread for _n, spread, _place in found)
+    def judge(self, found, per_rev, what, changed=()):
+        """changed: the passes (counted from 0) in which the spindle's speed was changed.  There Z is
+        allowed more room: a sensor that gives one pulse a turn knows of a change only at its next
+        pulse, makes up for it in the turn after, and the axis has to follow that."""
         apart = max(abs((place - found[0][2] + per_rev / 2.0) % per_rev - per_rev / 2.0) for _n, _s, place in found)
-        self.lines.append("      %s: %d passes, %s readings each; Z within %.1f steps of its place on the spindle, "
+        self.lines.append("      %s: %d passes; Z within %s steps of its place on the spindle in them, "
                           "the passes within %.1f steps of the first (a turn is %d steps)" % (
-                              what, len(found), "-".join(str(n) for n in sorted({found[0][0], found[-1][0]})), worst, apart, per_rev))
-        check(worst <= 4.0, "%s: Z wanders %.1f steps against the spindle's angle" % (what, worst))
+                              what, len(found), ", ".join("%.1f" % spread for _n, spread, _p in found), apart, per_rev))
+        for n, (_count, spread, _place) in enumerate(found):
+            room = (0.03 if n in changed else 0.015) * per_rev        # 11 and 5 degrees of the spindle
+            check(spread <= room, "%s, pass %d: Z wanders %.1f steps against the spindle's angle" % (what, n + 1, spread))
         check(apart <= 0.02 * per_rev, "%s: a pass begins %.1f steps (%.1f degrees) from the first: the threads do not "
               "line up" % (what, apart, apart / per_rev * 360.0))
 
@@ -434,7 +438,7 @@ class Session:
         if not SPEED_BY_S:
             check(fastest > 60 * HZ * 1.05, "the spindle's speed did not change in the second pass (%d rpm)" % fastest)
             self.lines.append("      in the second pass the spindle went from %d to %d rpm" % (60 * HZ, fastest))
-        self.judge(found, per_rev, "G33")
+        self.judge(found, per_rev, "G33", changed=() if SPEED_BY_S else (1,))
         self.healthy("G33")
 
     def step_g76(self):
