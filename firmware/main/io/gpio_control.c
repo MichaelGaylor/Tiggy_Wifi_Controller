@@ -58,6 +58,7 @@ static bool s_pump_on = false;
 static uint16_t s_pump_freq = 0;
 static bool s_spindle_ledc = false;                 /* spindle pin handed to the PWM unit */
 static uint16_t s_spindle_freq = 0;
+static uint16_t s_spindle_refused = 0;              /* a frequency that could not be set: not tried over and over */
 
 static bool pin_ok_input(int pin)
 {
@@ -284,9 +285,28 @@ static void spindle_write(bool on, uint16_t rpm)
         }
         s_spindle_ledc = true;
         s_spindle_freq = freq;
-    } else if (freq != s_spindle_freq) {
-        ledc_set_freq(LEDC_LOW_SPEED_MODE, SPINDLE_LEDC_TIMER, freq);
-        s_spindle_freq = freq;
+    } else if (freq != s_spindle_freq && freq != s_spindle_refused) {
+        /* The divider alone, if the clock the timer was given reaches the new
+         * frequency; otherwise the timer anew, with a clock that does.  (The
+         * clock chosen for 1 kHz cannot make 50 Hz: such a change used to be
+         * dropped without a word, the old frequency staying.) */
+        if (ledc_set_freq(LEDC_LOW_SPEED_MODE, SPINDLE_LEDC_TIMER, freq) == ESP_OK) {
+            s_spindle_freq = freq;
+        } else {
+            ledc_timer_config_t timer = {
+                .speed_mode = LEDC_LOW_SPEED_MODE,
+                .timer_num = SPINDLE_LEDC_TIMER,
+                .duty_resolution = SPINDLE_LEDC_BITS,
+                .freq_hz = freq,
+                .clk_cfg = LEDC_AUTO_CLK,
+            };
+            if (ledc_timer_config(&timer) == ESP_OK) {
+                s_spindle_freq = freq;
+            } else {
+                s_spindle_refused = freq;
+                ESP_LOGE(TAG, "Spindle PWM stays at %u Hz: %u Hz could not be set", s_spindle_freq, freq);
+            }
+        }
     }
 
     uint32_t duty = 0;

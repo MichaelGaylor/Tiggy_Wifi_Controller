@@ -271,7 +271,9 @@ def step_output(board, test):
                 assert counted == steps, "%d steps, %d pulses counted (%d missing)" % (steps, counted, steps - counted)
                 if want <= 65535:
                     assert seen, "no speed reading taken"
-                    assert all(abs(r - want) <= 2 + want * 0.003 for r in seen), \
+                    # (the speed is the time between two pulses: the interrupt that times them may
+                    # be 20 us late, which at 500 steps a second is one part in a hundred)
+                    assert all(abs(r - want) <= 2 + want * 20e-6 * rate for r in seen), \
                         "speed read as %d..%d rpm, expected %d" % (min(seen), max(seen), want)
                     notes.append("%d..%d rpm" % (min(seen), max(seen)))
                 if short:
@@ -394,6 +396,20 @@ def screw_cutting(c, info, test, sim, verbose):
         assert abs(m["offset"]) <= OFFSET, "%soffset %s (%.0f us)" % (what, deg(m["offset"]), m["us"])
 
     # ------------------------------------------------------------------ tests
+    def t_frequency():
+        # The controller started with its PWM at 1 kHz.  A host that then asks for 50 Hz must get
+        # 50 Hz: the sensor input says what the pin really does.
+        idle(c, stream_no)
+        spindle(on=True)
+        c.pump(1.0)
+        was = c.pump(0.3)["rpm"]
+        assert abs(was - 60000) <= 600, "reports %d rpm with the output at 1000 Hz" % was
+        spindle(hz=50)
+        c.pump(1.0)
+        now = c.pump(0.3)["rpm"]
+        assert abs(now - 3000) <= 30, "the output was asked to go from 1000 Hz to 50 Hz and is read as %d rpm (%.0f Hz)" % (now, now / 60.0)
+        return "1000 Hz read as %d rpm, then 50 Hz as %d" % (was, now)
+
     def t_seen():
         idle(c, stream_no)
         a, rpm_a = spinning(50)
@@ -563,6 +579,8 @@ def screw_cutting(c, info, test, sim, verbose):
 
     c.cfg_set(STATUS_MS, 1, 10)             # a status report every 10 ms
     try:
+        if not sim:
+            test("spindle PWM frequency changed from 1 kHz to 50 Hz", t_frequency)
         test("spindle output read back as a spindle: speed and count", t_seen)
         test("how steadily a turn is timed", t_period)
         test("pass at a steady spindle speed", t_steady)
@@ -624,11 +642,11 @@ def main():
 
             test("screw cutting offered once a single sensor is set", t_offered)
             print("--- step output: X step (GPIO %d) into the sensor input (GPIO %d)" % (step_pin, board.c.cfg_get(PIN_INDEX)))
-            if test.results[-1][1] == "ok" and step_output(board, test):
+            if all(r[1] == "ok" for r in test.results) and step_output(board, test):
                 if spindle_pin == 0xFF or step_pin == 0xFF:
                     print("--- screw cutting: left out, this controller has no spindle output to stand in for a spindle")
                 else:
-                    board.write({PIN_STEP_X: spindle_pin, PIN_SPINDLE: step_pin, PWM_ON: 1, PWM_HZ: 50})
+                    board.write({PIN_STEP_X: spindle_pin, PIN_SPINDLE: step_pin, PWM_ON: 1, PWM_HZ: 1000})
                     print("--- screw cutting: the spindle output on GPIO %d as the spindle" % step_pin)
                     screw_cutting(board.c, board.info, test, None, args.v)
         finally:
