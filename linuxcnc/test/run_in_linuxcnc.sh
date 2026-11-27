@@ -87,6 +87,9 @@ python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --lathe --spindle-sensor --na
     --no-toolchange-prompt --dir "$WORK/lathe" > /dev/null
 [ $STATUS -eq 0 ] && run_plan lathe "$WORK/lathe" "--encoder 1024" "0,2"
 
+# The same lathe at 150 rpm - two and a half turns a second - with a sensor that gives one pulse a turn
+[ $STATUS -eq 0 ] && TIGGY_TEST_RPM=150 TIGGY_TEST_SAG=0 run_plan lathe-slow "$WORK/lathe" "--encoder 1 --encoder-mode pulse" "0,2"
+
 echo
 cat "$TIGGY_TEST_RESULT" 2>/dev/null || echo "LinuxCNC produced no results"
 exit $STATUS

@@ -10,9 +10,13 @@ where LinuxCNC believes the machine is with where the simulated controller
 (tools/firmware_sim.py) really is, to the step.
 
 TIGGY_TEST_PLAN     basic (default), switches (a machine with home switches),
-                    threading (G33 on a mill) or lathe (X and Z, G33 and G76)
+                    threading (G33 on a mill), lathe (X and Z, G33 and G76) or
+                    lathe-slow (the same, for a second run at another speed)
 TIGGY_TEST_OUTPUTS  the controller's motor output of each joint: 0,1,2 unless
                     given (a lathe: 0,2)
+TIGGY_TEST_RPM      spindle speed for the screw cutting (300)
+TIGGY_TEST_SAG      how much of its speed the spindle loses during the second
+                    G33 pass, as if under the cut (0.15; 0 for none)
 TIGGY_TEST_RESULT   file the results are written to
 """
 
@@ -31,6 +35,8 @@ RESULT = os.environ.get("TIGGY_TEST_RESULT", "")
 OUTPUTS = [int(v) for v in os.environ.get("TIGGY_TEST_OUTPUTS", "0,1,2").split(",")]
 JOINTS = len(OUTPUTS)
 Z = JOINTS - 1                          # the joint that is Z: the last, on a mill and on a lathe
+RPM = float(os.environ.get("TIGGY_TEST_RPM", "300"))
+SAG = float(os.environ.get("TIGGY_TEST_SAG", "0.15"))
 
 
 class Failure(Exception):
@@ -335,22 +341,22 @@ class Session:
         # Three G33 passes of 8 turns, pitch 2 mm.  In the second the spindle slows by 15 % as if
         # under the cut.  The simulator records every step of Z with the spindle's angle at it.
         sim = self.sim
-        sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0, ripple=0.0, ripple_hz=0.0)
-        self.mdi("M3 S300")
-        self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 8, "the spindle to reach 300 rpm")
+        sim.cmd(cmd="spindle", follow=0, rpm=RPM, accel=2000.0, ripple=0.0, ripple_hz=0.0)
+        self.mdi("M3 S%g" % RPM)
+        self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - RPM) < 0.01 * RPM, 20, "the spindle to reach %g rpm" % RPM)
         time.sleep(1.5)
         pitch, depth = 2.0, 16.0
         per_rev = pitch * self.scale[Z] * (-1.0)        # Z goes negative: steps per revolution, signed
         z0 = round(self.poll().position[2], 4)
         sim.cmd(cmd="trace", axis=2)
-        for n, slow in enumerate((None, 255.0, None)):
+        for n, slow in enumerate((None, RPM * (1.0 - SAG) if SAG else None, None)):
             if slow:
-                sim.cmd(cmd="spindle", follow=0, rpm=slow, accel=60.0)      # sags through the pass
-            self.mdi("G33 Z%g K%g" % (z0 - depth, pitch), timeout=90)
-            sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0)
+                sim.cmd(cmd="spindle", follow=0, rpm=slow, accel=RPM / 5.0)     # sags through the pass
+            self.mdi("G33 Z%g K%g" % (z0 - depth, pitch), timeout=180)
+            sim.cmd(cmd="spindle", follow=0, rpm=RPM, accel=2000.0)
             self.mdi("G0 Z%g" % z0)
             self.check_position("after pass %d" % (n + 1))
-            self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 8, "the spindle to recover")
+            self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - RPM) < 0.01 * RPM, 20, "the spindle to recover")
             time.sleep(1.2)
         self.mdi("M5")
         self.check_passes(per_rev, abs(per_rev) * depth / pitch, 3)
@@ -412,15 +418,15 @@ class Session:
         # A threading cycle: G76 makes pass after pass by itself, each deeper than the last
         # (0.4, 0.8 and 1.2 mm, and one spring pass at that depth).
         sim = self.sim
-        sim.cmd(cmd="spindle", follow=0, rpm=300.0, accel=2000.0, ripple=0.0, ripple_hz=0.0)
-        self.mdi("M3 S300")
-        self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 300.0) < 3.0, 8, "the spindle to reach 300 rpm")
+        sim.cmd(cmd="spindle", follow=0, rpm=RPM, accel=2000.0, ripple=0.0, ripple_hz=0.0)
+        self.mdi("M3 S%g" % RPM)
+        self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - RPM) < 0.01 * RPM, 20, "the spindle to reach %g rpm" % RPM)
         time.sleep(1.5)
         pitch, start, end = 2.0, 2.0, -16.0
         per_rev = pitch * self.scale[Z] * (-1.0)
         self.mdi("G0 X24 Z%g" % start)
         sim.cmd(cmd="trace", axis=2)
-        self.mdi("G76 P%g Z%g I-1 J0.4 K1.2 H1" % (pitch, end), timeout=300)
+        self.mdi("G76 P%g Z%g I-1 J0.4 K1.2 H1" % (pitch, end), timeout=600)
         self.check_position("after G76")
         self.mdi("M5")
         self.check_passes(per_rev, abs(per_rev) * (start - end) / pitch, 4, each=False)
@@ -435,6 +441,7 @@ class Session:
             "switches": [self.step_ready, self.step_home_on_switches, self.step_mdi],
             "threading": [self.step_ready, self.step_on_and_home, self.step_threading],
             "lathe": [self.step_ready, self.step_on_and_home, self.step_lathe_moves, self.step_threading, self.step_g76],
+            "lathe-slow": [self.step_ready, self.step_on_and_home, self.step_threading, self.step_g76],
         }
         for fn in plans[PLAN]:
             name = fn.__name__[5:]

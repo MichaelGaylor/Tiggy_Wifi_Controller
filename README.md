@@ -148,7 +148,7 @@ The LinuxCNC driver is tested the same way. It builds, unchanged, around a stand
 linuxcnc/test/build.sh                    # or build.bat on Windows
 python tools/linuxcnc_driver_test.py      # moves to the step, packet loss, a stalling PC, E-stop, limits, reconnection
 linuxcnc/test/run_in_linuxcnc.sh          # the same driver inside a real LinuxCNC (Linux with linuxcnc-uspace-dev):
-                                          # a mill, home switches, G33, and a lathe with G33 and a G76 cycle
+                                          # a mill, home switches, G33, and a lathe with G33 and a G76 cycle (also at 150 rpm by a one-pulse sensor)
 xvfb-run -a python3 linuxcnc/test/config_test.py     # the set-up program, worked from its pages against the simulator
 ```
 
