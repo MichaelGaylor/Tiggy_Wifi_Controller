@@ -104,12 +104,29 @@ static double spin_turns_now(void)
     return sp.turns + sp.rate * ((double)pc_now_us - (double)sp.at);
 }
 
+/* The bench links of tools/encoder_loopback_test.py (fws_links): the spindle
+ * output wired to the encoder's A input, the charge pump to B, the Z step
+ * output to the index input.  The spindle PWM at half duty and the charge
+ * pump are two square waves; when they have one frequency they are a
+ * quadrature signal of that many lines a second - which way round is chance,
+ * and settled anew whenever one of them is started or changed.  One of them
+ * alone counts one way and back again. */
+static struct {
+    bool     on;
+    int      missing;           /* a link left off: 1 A, 2 B, 3 the index */
+    double   slip;              /* fraction of the counts that goes missing */
+    int      dir;
+    double   hz, alone_hz;      /* lines a second of A and B together; of the one that runs alone */
+    uint32_t was[4];
+} s_links;
+
 /* What the pulse counter holds.  With only A connected its edges count one
  * way and back again: the count never gets anywhere. */
 static int64_t spin_count(void)
 {
     if (sp.b_open) return (int64_t)floor(sp.turns * 2.0 * sp.lines) & 1;
-    return (int64_t)floor(sp.turns * 4.0 * sp.lines);
+    int64_t alone = s_links.alone_hz > 0.0 ? ((int64_t)floor((double)sp.at * 2.0e-6 * s_links.alone_hz) & 1) : 0;
+    return (int64_t)floor(sp.turns * 4.0 * sp.lines) + alone;
 }
 
 /* When a pulse that came us_into_step into the step being made is noticed:
@@ -130,7 +147,7 @@ static void spin_step(void)
         double a = (before - sp.index_at) * sp.ppr, b = (after - sp.index_at) * sp.ppr;
         for (double k = floor(a) + 1.0; k <= b; k += 1.0)
             spt_pulse(spin_noticed((k - a) / (b - a) * SPIN_STEP_US));
-    } else if (sp.mode == SPT_QUADRATURE && sp.index && sp.pulse_wired) {
+    } else if (sp.mode == SPT_QUADRATURE && sp.index && sp.pulse_wired && !s_links.on) {
         double a = before - sp.index_at, b = after - sp.index_at;
         if (floor(a) != floor(b)) {
             double edge = b > a ? floor(b) : floor(a);
@@ -152,6 +169,11 @@ static void spin_step(void)
     }
 
     /* the speed from here on */
+    if (s_links.on) {
+        sp.rate = sp.lines > 0 ? s_links.dir * s_links.hz * (1.0 - s_links.slip) / sp.lines / 1.0e6 : 0.0;
+        sp.rpm = sp.rate * 60.0e6;
+        return;
+    }
     double want = sp.forced;
     if (sp.follow) want = m.out.spindle == 1 ? (double)m.out.rpm : m.out.spindle == 2 ? -(double)m.out.rpm : 0.0;
     double change = sp.accel * SPIN_STEP_US / 1.0e6;
@@ -178,6 +200,10 @@ void pc_set_dir(int axis, bool negative) { m.dir_neg[axis] = negative; }
 
 void pc_step(uint8_t mask)
 {
+    if (s_links.on && s_links.missing != 3 && (mask & (1u << 2))) {     /* the Z step pulse on the index input */
+        if (sp.mode == SPT_QUADRATURE && sp.index) spt_index(pc_now_us);
+        else if (sp.mode == SPT_PULSES) spt_pulse(pc_now_us);
+    }
     for (int i = 0; i < AXES; i++) {
         if (!(mask & (1u << i))) continue;
         m.phys[i] += m.dir_neg[i] ? -1 : 1;
@@ -374,6 +400,31 @@ uint8_t mc_hal_limit_inputs(void)
 bool mc_hal_probe_input(void) { return pc_probe_active(); }
 bool mc_hal_estop_input(void) { return m.force_estop != 0; }
 
+/* The frequency a PWM timer of the chip really makes of the one asked for:
+ * its 80 MHz clock divided by a number with eight binary places. */
+static double pwm_made(uint32_t asked, uint32_t steps)
+{
+    double div = floor(80.0e6 * 256.0 / ((double)asked * steps) + 0.5);
+    return 80.0e6 * 256.0 / (div * steps);
+}
+
+static void links_follow(void)
+{
+    if (!s_links.on) return;
+    uint32_t pump = cfg_u(WCNC_CFG_CHARGE_PUMP_FREQ), pwm = cfg_u(WCNC_CFG_SPINDLE_PWM_FREQ);
+    if (pump < 100) pump = 10000;
+    bool a = m.duty > 0.02 && m.duty < 0.98 && pwm >= 100 && s_links.missing != 1;
+    bool b = m.out.charge_pump && s_links.missing != 2;
+    uint32_t now[4] = { a, b, pwm, pump };
+    if (memcmp(now, s_links.was, sizeof(now)) == 0) return;
+    memcpy(s_links.was, now, sizeof(now));
+    double fa = a ? pwm_made(pwm, 1024) : 0.0, fb = b ? pwm_made(pump, 256) : 0.0;
+    sp.rnd = sp.rnd * 1664525u + 1013904223u;
+    s_links.dir = (sp.rnd >> 20) & 1 ? 1 : -1;
+    s_links.hz = (a && b && fabs(fa - fb) < 1.0e-6 * fa) ? fa : 0.0;
+    s_links.alone_hz = s_links.hz > 0.0 ? 0.0 : (a ? fa : fb);
+}
+
 void mc_hal_apply_outputs(const mc_outputs_t *out)
 {
     m.out = *out;
@@ -389,6 +440,7 @@ void mc_hal_apply_outputs(const mc_outputs_t *out)
     } else {
         m.duty = 1.0;
     }
+    links_follow();
 }
 
 void mc_hal_drivers(bool enabled) { m.drivers = enabled; }
@@ -502,6 +554,7 @@ EXPORT void fws_init(int io_module, int encoder_ppr, uint32_t fw_version)
     s_leg_head = s_leg_tail = 0;
     memset(&sp, 0, sizeof(sp));
     memset(&s_fit, 0, sizeof(s_fit));
+    memset(&s_links, 0, sizeof(s_links));
     sp.at = pc_now_us;
     sp.next_sample = sp.at + SPT_SAMPLE_US;
     sp.follow = true;
@@ -577,6 +630,21 @@ EXPORT void fws_fit(int lines, int index, int b_open)
     s_fit.b_open = b_open != 0;
     s_sensor_wired = s_fit.lines ? false : s_fit.was_wired;
     apply_layout();
+}
+
+/* The bench links fitted (see s_links) or taken off again.  'missing': one of
+ * them left off (1 A, 2 B, 3 the index); 'slip': the fraction of the counts
+ * that is lost on the way, for a test of what notices it. */
+EXPORT void fws_links(int on, int missing, double slip)
+{
+    memset(&s_links, 0, sizeof(s_links));
+    s_links.on = on != 0;
+    s_links.missing = missing;
+    s_links.slip = slip;
+    s_links.dir = 1;
+    s_links.was[0] = 0xFFFFFFFFu;           /* (whatever the outputs do now is news) */
+    links_follow();
+    sp.counts = spin_count();
 }
 
 /* True (once) when a setting that a controller reads at start-up has been
@@ -710,6 +778,7 @@ EXPORT int fws_tcp(const uint8_t *data, int len, uint8_t *resp, int resp_size)
                 else memcpy(&c->u, q.value, 4);
                 apply_timing();
                 mc_config_changed();
+                links_follow();             /* (spindle PWM and charge pump settings take effect at once) */
                 if (c->u != before && (q.key == WCNC_CFG_MACHINE_LAYOUT || q.key == WCNC_CFG_ENCODER_PPR ||
                                        q.key == WCNC_CFG_ENCODER_MODE))
                     s_restart_pending = true;

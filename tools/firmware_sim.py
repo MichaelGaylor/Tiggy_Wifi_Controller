@@ -26,6 +26,9 @@ screw cutting.  It follows the spindle output unless told otherwise:
     {"cmd":"fit","lines":600,"index":1}          an encoder of 600 lines on the four-axis layout's
                                                  terminals, whatever the settings take it for
                                                  ("b_open":1: its B signal not connected; "lines":0: none)
+    {"cmd":"links","on":1}                       the bench links of encoder_loopback_test.py: spindle output
+                                                 to A, charge pump to B, Z step to the index input
+                                                 ("missing":1, 2 or 3: one left off; "slip":1e-4: counts lost)
     {"cmd":"trace","axis":2}                     record the steps of Z with the spindle angle at each
     {"cmd":"trace_read"}
 """
@@ -90,6 +93,7 @@ def load_library(path):
             lib.fws_log.argtypes = [ctypes.c_char_p, ctypes.c_int]
             lib.fws_encoder.argtypes = [ctypes.c_int] * 3
             lib.fws_fit.argtypes = [ctypes.c_int] * 3
+            lib.fws_links.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_double]
             lib.fws_restart_wanted.restype = ctypes.c_int
             lib.fws_spindle.argtypes = [ctypes.c_int] + [ctypes.c_double] * 4
             lib.fws_trace.argtypes = [ctypes.c_int]
@@ -343,6 +347,8 @@ class FirmwareSim:
                                      int(req.get("index", 1)))
             elif cmd == "fit":
                 self.lib.fws_fit(int(req.get("lines", 0)), int(req.get("index", 1)), int(req.get("b_open", 0)))
+            elif cmd == "links":
+                self.lib.fws_links(int(req.get("on", 1)), int(req.get("missing", 0)), float(req.get("slip", 0.0)))
             elif cmd == "trace":
                 self.lib.fws_trace(int(req.get("axis", 2)))
             elif cmd == "trace_read":

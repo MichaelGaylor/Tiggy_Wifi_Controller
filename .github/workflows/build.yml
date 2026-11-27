@@ -86,6 +86,10 @@ jobs:
           python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder lines=1024 --part hand --wait 30 --expect "1024, most likely"
           python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder index=0 --part hand --wait 30 --expect "no index pulse"
           python tools/encoder_bench_test.py 127.0.0.1 --lines 600 --sim --sim-encoder b_open=1 --part hand --wait 10 --expect "only one of A and B"
+          # the controller testing its encoder inputs with signals of its own - and noticing a link left off, and counts lost
+          python tools/encoder_loopback_test.py 127.0.0.1 --sim
+          python tools/encoder_loopback_test.py 127.0.0.1 --sim --sim-links missing=2 --expect "(charge pump) to GPIO"
+          python tools/encoder_loopback_test.py 127.0.0.1 --sim --sim-links slip=20 -k "62300 lines" --expect "against the clock"
 
   test-linuxcnc-driver:
     name: Test the LinuxCNC driver

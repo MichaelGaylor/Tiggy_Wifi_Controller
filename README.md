@@ -137,6 +137,7 @@ python tools/protocol_conformance.py --sim --motion 127.0.0.1    # protocol test
 python tools/firmware_selftest.py         # G-code mode moves, feed hold, homing, older hosts, starved stream, pulse spacing
 python tools/threading_test.py            # screw cutting: every step of a pass against the angle of a simulated spindle
 python tools/encoder_bench_test.py 127.0.0.1 --lines 1024 --sim    # the bench test of a real encoder (below), the simulator turning one
+python tools/encoder_loopback_test.py 127.0.0.1 --sim              # the board's test of its own encoder inputs (below), on the simulator
 python tools/ugs_compat_test.py           # TiggyUGS's own connection, planner and sender code against the firmware
                                           # (needs TiggyUGS's source and its Python packages: see the file)
 ```
@@ -175,6 +176,14 @@ python tools/spindle_loopback_test.py <ip> --bench    # counts its own step puls
 ```
 
 It changes settings (the spindle sensor, and which terminal is X step and which the spindle output) and puts them back at the end, so nothing but the wire may be connected to those two terminals. The file says what is measured and how.
+
+With three links - spindle output to encoder A, charge pump to encoder B, Z step to the index input: GPIO 9 to 16, 39 to 17 and 42 to 21 on the DevKitC with octal memory - the board tests its encoder inputs with no encoder at all:
+
+```bash
+python tools/encoder_loopback_test.py <ip> --bench    # A, B and index made by the controller itself: the count at speed, the index pulse, screw cutting
+```
+
+The spindle PWM and the charge pump, set to one frequency, are an encoder's A and B; Z stepped by the clock is its index pulse, and a measure of the count as well, since all three come from one crystal. The test checks that the real pulse counter neither loses nor gains a count at up to 62 300 lines a second (a quarter of a million counts, three million in all), that every index pulse is taken and found at one place, and that threading passes are played by A and B as they are by a single sensor. What it cannot check is an encoder itself and the wiring to it - for that:
 
 A spindle encoder can be tested the same way before it is on a machine: wired to the controller, turned by hand, then spun with a cordless drill on its shaft.
 

@@ -80,10 +80,11 @@ OUT, OFFSET, APART = 0.004, 0.004, 0.003        # turns: what a pass may be out 
 class Follow:
     """How far the encoder has turned, from the angle in every status report.
 
-    The angle comes round once a turn; how many turns lie between two reports is known from
-    how fast it was going at the report before (and, over a gap in the reports, from the
-    speed reported).  Each report is given the result as 'turns', counted in the direction
-    the encoder last ran in."""
+    The angle comes round once a turn.  Between two reports the encoder has mostly made less
+    than half a turn, and the angle alone says how far it went; when the speed reported
+    says it made more, that speed says how many turns.  Each report is given the result
+    as 'turns', counted in the direction the encoder last ran in; a whole number of turns
+    is where the angle reported is 0 - at the index pulse, once the controller knows it."""
 
     def __init__(self, c):
         self.c, self.n = c, len(c.log)
@@ -97,7 +98,9 @@ class Follow:
             s = log[self.n]
             self.n += 1
             p = self.prev
-            if p is not None:
+            if p is None:
+                self.turns = s["spindle_pos"] / 65536.0     # (so that whole turns are where the angle reported is 0)
+            else:
                 dt = s["up"] - p["up"]
                 if dt <= 0:                     # the same report twice (or the controller restarted)
                     s["turns"] = self.sign * self.turns
@@ -105,10 +108,14 @@ class Follow:
                         self.prev, self.rate = s, 0.0
                     continue
                 raw = ((s["spindle_pos"] - p["spindle_pos"]) & 0xFFFF) / 65536.0
-                expect = self.rate * dt
-                if dt > 25:
-                    expect = (1 if self.rate >= 0 else -1) * (p["rpm"] + s["rpm"]) / 120000.0 * dt
-                d = expect + fold(raw - expect)
+                by_speed = (p["rpm"] + s["rpm"]) / 120000.0 * dt        # turns, going by the speed reported
+                if by_speed < 0.3:
+                    d = fold(raw)                   # less than half a turn: the angle alone says it
+                else:
+                    way = 1 if self.rate >= 0 else -1
+                    if abs(self.rate * dt) < 0.1:   # at rest a report ago: which way round is not known yet
+                        way = 1 if abs(fold(raw - by_speed)) <= abs(fold(raw + by_speed)) else -1
+                    d = way * by_speed + fold(raw - way * by_speed)
                 self.turns += d
                 self.rate = d / dt
                 if abs(self.rate) > 0.0005:     # half a turn a second
@@ -292,10 +299,14 @@ def by_hand(board, test, bench, f, args):
     return all(r[1] == "ok" for r in test.results)
 
 
-def by_drill(board, test, bench, f, args):
+def by_drill(board, test, bench, f, args, own=False):
+    """own: the spindle is a signal the controller makes itself (encoder_loopback_test.py),
+    and 'bench' switches it; bench.waiting(), if it has one, is called while waiting for it."""
     c, info, lines = board.c, board.info, args.lines
     stream_no = [150]
     plan = {}
+    drill = "the signal" if own else "the drill"
+    waiting = getattr(bench, "waiting", lambda: None)
 
     def running(seconds):
         f.take()
@@ -310,7 +321,8 @@ def by_drill(board, test, bench, f, args):
             rpm = [r[2] for r in running(1.5)]
             if len(rpm) > 50 and min(rpm) >= 200 and max(rpm) - min(rpm) <= 0.25 * max(rpm):
                 return sum(rpm) / len(rpm) / 60.0
-        raise AssertionError("%s: the drill is not running steadily at 200 rpm or more (%d rpm)" % (what, c.status["rpm"]))
+            waiting()
+        raise AssertionError("%s: %s is not running steadily at 200 rpm or more (%d rpm)" % (what, drill, c.status["rpm"]))
 
     def make_pass(hz, seconds=5.0):
         spr = next(n for n in (197, 149, 101, 61, 37, 19) if n * hz * 1.5 <= 0.6 * info["max_rate"] or n == 19)
@@ -409,7 +421,7 @@ def by_drill(board, test, bench, f, args):
         c.stream(st, p.segs, until=watch, timeout=60.0)
         end = time.perf_counter() + 60.0
         while not watch(c.pump(0.02)):
-            assert c.status["state"] == RUN and time.perf_counter() < end, "the drill was not stopped while the pass was played"
+            assert c.status["state"] == RUN and time.perf_counter() < end, "%s was not stopped while the pass was played" % drill
         c.pump(0.5)
         a = c.pump(0.05)
         b = c.pump(1.0)
@@ -442,7 +454,10 @@ def by_drill(board, test, bench, f, args):
         assert not (c.sflags_seen & SF_UNDERRUN), "reported an underrun while waiting"
         start = len(c.log)
         bench.cue("drill", "Run the drill again")
-        c.wait(lambda s: s["pos"][2] != p0[2], args.wait, "the drill to turn")
+        end = time.perf_counter() + args.wait
+        while c.pump(0.02)["pos"][2] == p0[2]:
+            assert time.perf_counter() < end, "timed out waiting for %s to turn the spindle" % drill
+            waiting()
         rest_of = p.segs[100:] + back(p)
         c.stream(st, rest_of, first=100, timeout=60.0)
         total = 100 + len(rest_of)
@@ -451,16 +466,25 @@ def by_drill(board, test, bench, f, args):
         m = lay(p0, c.log[start:], p, "from rest")
         good(m)
         rpms = [r[4] for r in m["res"]]
-        return "waited 1.5 s without a step; then, with the drill running up from %d to %d rpm, the worst report %s outside its band, offset %s" % (
+        return "waited 1.5 s without a step; then, with the spindle running up from %d to %d rpm, the worst report %s outside its band, offset %s" % (
             min(rpms), max(rpms), deg(m["out"]), deg(m["offset"]))
 
+    if own:
+        names = ("A and B read as a spindle turning", "threading pass played by A and B", "a second pass lies on the first",
+                 "signal stopped in mid-pass: Z stops with it, and the pass can be given up",
+                 "a pass waits for the signal, and begins where the count comes round")
+    else:
+        names = ("spun by the drill: speed read" if args.no_index else "spun by the drill: no counts lost",
+                 "threading pass played by the encoder", "a second pass lies on the first",
+                 "drill stopped in mid-pass: Z stops with it, and the pass can be given up",
+                 "a pass waits for the spindle" if args.no_index else "a pass waits for the spindle and begins at its index")
     try:
-        test("spun by the drill: speed read" if args.no_index else "spun by the drill: no counts lost", t_speed)
+        test(names[0], t_speed)
         if "hz" in plan:
-            test("threading pass played by the encoder", t_pass)
-            test("a second pass lies on the first", t_two)
-            test("drill stopped in mid-pass: Z stops with it, and the pass can be given up", t_stops)
-            test("a pass waits for the spindle" if args.no_index else "a pass waits for the spindle and begins at its index", t_waits)
+            test(names[1], t_pass)
+            test(names[2], t_two)
+            test(names[3], t_stops)
+            test(names[4], t_waits)
     finally:
         bench.cue("done", "Stop the drill. That is all")
         try:
