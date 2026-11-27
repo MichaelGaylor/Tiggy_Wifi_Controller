@@ -7,7 +7,9 @@
 #
 # The driver is built by LinuxCNC's own halcompile and installed with the
 # other HAL components (this needs your password, for sudo).  The set-up
-# wizard then writes a configuration to ~/linuxcnc/configs.
+# program is put in the menu ("Tiggy set-up for LinuxCNC") and started: it
+# finds the controller and writes a configuration to ~/linuxcnc/configs.
+# Without a screen the same questions are asked in the terminal.
 
 set -e
 
@@ -69,10 +71,33 @@ echo "Installing it (sudo may ask for your password)..."
 }
 echo "The driver is installed."
 
+# The set-up programs, where the menu entry finds them again
+SHARE="$HOME/.local/share/tiggy"
+if [ -f "$HERE/tiggy_config.py" ] && mkdir -p "$SHARE" "$HOME/.local/share/applications" 2>/dev/null; then
+    cp "$HERE/tiggy_setup.py" "$HERE/tiggy_config.py" "$HERE/tiggy_link.py" "$SHARE/"
+    cat > "$HOME/.local/share/applications/tiggy-config.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Tiggy set-up for LinuxCNC
+Comment=Find the Tiggy controller and set up a mill, router or lathe with it
+Exec=python3 $SHARE/tiggy_config.py
+Icon=linuxcncicon
+Terminal=false
+Categories=Utility;
+EOF
+else
+    SHARE="$HERE"
+fi
+
 if [ "$1" = "--driver" ]; then
     echo "Restart LinuxCNC to use the new driver."
     exit 0
 fi
 
 echo
-python3 "$HERE/tiggy_setup.py"
+if [ -n "${DISPLAY}${WAYLAND_DISPLAY}" ] && [ -f "$SHARE/tiggy_config.py" ] && python3 -c "import tkinter" 2>/dev/null; then
+    echo "Starting the set-up program.  It is in the menu as well: Tiggy set-up for LinuxCNC."
+    python3 "$SHARE/tiggy_config.py"
+else
+    python3 "$SHARE/tiggy_setup.py"
+fi

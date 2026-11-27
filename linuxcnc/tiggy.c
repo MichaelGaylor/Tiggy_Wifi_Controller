@@ -186,6 +186,8 @@ typedef struct {                        /* what the controller reports: written 
     uint8_t  online, ready, estop, probe;
     uint8_t  switches, inputs;
     uint16_t rpm;
+    uint16_t spindle_angle;             /* past the index, 65536 = one turn: from the same report as position[] */
+    uint32_t spindle_turns;             /* index pulses the controller has counted */
     int64_t  position[MAX_JOINTS];      /* steps, counted the way LinuxCNC counts them */
     uint32_t underruns, resent, corrections, buffer_ms;
     uint32_t beat;                      /* changes with every report: the link thread is alive */
@@ -284,6 +286,8 @@ typedef struct {
     hal_float_t *spindle_speed, *spindle_rps, *spindle_rpm;
     hal_float_t *spindle_revs;          /* out: for spindle.N.revs */
     hal_bit_t   *spindle_index_enable;  /* io:  for spindle.N.index-enable */
+    hal_u32_t   *spindle_turns;         /* out: the controller's own reading of its sensor: turns counted... */
+    hal_float_t *spindle_angle;         /* ...and how far round the turn it is, 0 to 1 */
     hal_float_t *buffer_ms;
     hal_u32_t   *underruns, *resent, *corrections;
 
@@ -447,6 +451,8 @@ static void tg_read(void *arg, long period)
     *h->estop = a.estop;
     *h->spindle_rpm = (double)a.rpm;
     *h->spindle_rps = (double)a.rpm / 60.0;
+    *h->spindle_turns = a.spindle_turns;
+    *h->spindle_angle = (double)a.spindle_angle / 65536.0;
     {
         /* The copy of the spindle that LinuxCNC follows in G33 and G76 */
         double dt = (double)(period > 0 ? period : 1000000) * 1.0e-9;
@@ -1699,6 +1705,8 @@ static void publish(link_t *L)
         a.switches = L->st.limit_switches;
         a.inputs = L->st.misc_inputs;
         a.rpm = L->st.spindle_rpm;
+        a.spindle_angle = L->st.spindle_position;
+        a.spindle_turns = L->st.spindle_index_count;
     }
     memcpy(a.position, L->position, sizeof(a.position));
     a.can_sync = (uint8_t)(live && (L->hs.capabilities & WCNC_CAP_SPINDLE_SYNC) != 0);
@@ -1927,6 +1935,8 @@ static int export_pins(tg_hal_t *h)
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_rpm, comp_id, COMP ".spindle-speed-fb-rpm"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_revs, comp_id, COMP ".spindle-revs"));
     CHECK(hal_pin_bit_newf(HAL_IO, &h->spindle_index_enable, comp_id, COMP ".spindle-index-enable"));
+    CHECK(hal_pin_u32_newf(HAL_OUT, &h->spindle_turns, comp_id, COMP ".spindle-turns"));
+    CHECK(hal_pin_float_newf(HAL_OUT, &h->spindle_angle, comp_id, COMP ".spindle-angle"));
     CHECK(hal_pin_bit_newf(HAL_IN, &h->flood, comp_id, COMP ".coolant-flood"));
     CHECK(hal_pin_bit_newf(HAL_IN, &h->mist, comp_id, COMP ".coolant-mist"));
     CHECK(hal_pin_float_newf(HAL_OUT, &h->buffer_ms, comp_id, COMP ".buffer-ms"));

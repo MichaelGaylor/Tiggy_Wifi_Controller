@@ -6,6 +6,9 @@ Asks about the machine and writes a complete LinuxCNC configuration for it:
 
     python3 tiggy_setup.py               answer the questions
     python3 tiggy_setup.py --defaults    a plain 3-axis machine without questions
+    python3 tiggy_setup.py --defaults --lathe      a plain lathe (X and Z)
+
+(tiggy_config.py asks the same in windows, with the controller connected.)
 
 The result is a folder in ~/linuxcnc/configs with
     <name>.ini      the machine: speeds, travels, homing, and in its [TIGGY]
@@ -13,12 +16,14 @@ The result is a folder in ~/linuxcnc/configs with
     tiggy.hal       how LinuxCNC and the controller are connected
     postgui.hal     for your own additions
     tool.tbl        tool table
+    tiggy.json      the answers, for tiggy_config.py to open again
 
 Everything can be changed afterwards by editing the INI file; the wizard is
 only the quick way to a working start.
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -28,8 +33,10 @@ LETTERS = "XYZABC"
 # ------------------------------------------------------------------ asking
 
 class Asker:
-    def __init__(self, use_defaults):
+    def __init__(self, use_defaults, lathe=False, sensor=False):
         self.use_defaults = use_defaults
+        self.lathe = lathe                  # what is offered as the kind of machine...
+        self.sensor = sensor                # ...and for the spindle sensor
 
     def text(self, prompt, default):
         if self.use_defaults:
@@ -94,6 +101,23 @@ def heading(text):
 
 # --------------------------------------------------------------- questions
 
+def travel_default(m, letter):
+    """Lowest and highest position offered for a linear axis."""
+    inch = m["inch"]
+    if m.get("lathe"):
+        if letter == "X":                   # (as a radius, from a little beyond the centre line)
+            return (-0.4, 6.0) if inch else (-10.0, 150.0)
+        return (-16.0, 0.4) if inch else (-400.0, 10.0)
+    if letter == "Z":
+        return (-4.0, 0.0) if inch else (-100.0, 0.0)
+    return (0.0, 12.0) if inch else (0.0, 300.0)
+
+
+def outputs(m):
+    """The controller's motor output each joint is on, in the order of the joints."""
+    return [j.get("output", n) for n, j in enumerate(m["joints"])]
+
+
 def ask_machine(ask):
     m = {}
     heading("The machine")
@@ -103,11 +127,19 @@ def ask_machine(ask):
     m["address"] = ask.text("Address of the controller", "auto")
     m["inch"] = ask.choice("Units", [("mm", "millimetres"), ("inch", "inches")], "mm") == "inch"
     unit = "inch" if m["inch"] else "mm"
+    m["lathe"] = ask.choice("Kind of machine", [("m", "mill or router"), ("l", "lathe")],
+                            "l" if ask.lathe else "m") == "l"
+    m["diameter"] = False
 
-    letters = ask.text("Axes, in the order of the controller's motor outputs", "XYZ").upper().replace(" ", "")
-    letters = "".join(c for c in letters if c in LETTERS)[:6] or "XYZ"
+    if m["lathe"]:
+        say("  A lathe has X (the cross slide) on the controller's X output and Z (the carriage) on its Z output.")
+        m["diameter"] = ask.yes("Are X positions given as diameters (G7), as on most lathes", True)
+        letters = "XZ"
+    else:
+        letters = ask.text("Axes, in the order of the controller's motor outputs", "XYZ").upper().replace(" ", "")
+        letters = "".join(c for c in letters if c in LETTERS)[:6] or "XYZ"
     gantry = ""
-    if len(letters) < 6 and ask.yes("Is there a second motor on one axis (a gantry)", False):
+    if not m["lathe"] and len(letters) < 6 and ask.yes("Is there a second motor on one axis (a gantry)", False):
         gantry = ask.text("Which axis has the second motor", "Y").upper()[:1]
         if gantry not in letters:
             gantry = ""
@@ -120,8 +152,10 @@ def ask_machine(ask):
         rotary = letter in "ABC"
         j = {"letter": letter, "second": second, "rotary": rotary}
         u = "degree" if rotary else unit
+        # The motor output the joint is on: in the order asked, except that a lathe's Z is on the Z output
+        j["output"] = LETTERS.index(letter) if m["lathe"] else len(m["joints"])
         heading("%s axis%s (controller output %s)" % (letter, ", second motor" if second else "",
-                                                     LETTERS[len(m["joints"])]))
+                                                     LETTERS[j["output"]]))
         if second:
             first = next(x for x in m["joints"] if x["letter"] == letter)
             j.update({k: first[k] for k in ("scale", "vel", "acc", "lo", "hi")})
@@ -134,11 +168,11 @@ def ask_machine(ask):
             if rotary:
                 j["lo"], j["hi"] = -99999.0, 99999.0
             else:
-                j["lo"] = ask.number("Travel: lowest position, %s" % u, 0.0 if letter != "Z" else (-4.0 if m["inch"] else -100.0))
-                j["hi"] = ask.number("Travel: highest position, %s" % u,
-                                     ((12.0 if m["inch"] else 300.0) if letter != "Z" else 0.0), j["lo"])
+                lo, hi = travel_default(m, letter)
+                j["lo"] = ask.number("Travel: lowest position, %s" % u, lo)
+                j["hi"] = ask.number("Travel: highest position, %s" % u, hi, j["lo"])
             j["reverse"] = ask.yes("Reverse the direction of this motor", False)
-        index = len(m["joints"])
+        index = j["output"]                 # each motor output has a limit input of the same name
         j["switch_input"] = index
         if second and (first["home_switch"] or first["limit_switch"]) and not ask.yes(
                 "Does this motor have a switch of its own, on the %s limit input (to square the gantry)"
@@ -155,11 +189,11 @@ def ask_machine(ask):
         j["home_switch"] = use in ("h", "b")
         j["limit_switch"] = use in ("l", "b")
         j["switch_nc"] = False
-        j["home_positive"] = first["home_positive"] if second else letter == "Z"
+        j["home_positive"] = first["home_positive"] if second else (letter == "Z" or m["lathe"])
         if use != "n":
             j["switch_nc"] = ask.yes("Is it a normally-closed switch (opens when operated)", False)
         if j["home_switch"] and not second:
-            j["home_positive"] = ask.yes("Is the home switch at the high end of the travel", letter == "Z")
+            j["home_positive"] = ask.yes("Is the home switch at the high end of the travel", letter == "Z" or m["lathe"])
         m["joints"].append(j)
 
     heading("Step signals")
@@ -179,7 +213,7 @@ def ask_machine(ask):
         m["pwm_freq"] = ask.whole("PWM frequency, Hz", 1000, 1, 50000)
     say("  For screw cutting (G33, G76) the controller needs a sensor on the spindle: an encoder,")
     say("  or one pulse per revolution.  It is set up on the controller (terminal layout, kind of sensor).")
-    m["threading"] = ask.yes("Is there such a sensor, for screw cutting", False)
+    m["threading"] = ask.yes("Is there such a sensor, for screw cutting", ask.sensor)
 
     heading("Safety")
     m["estop"] = ask.yes("Is an E-stop button wired to the controller's E-stop input", False)
@@ -240,6 +274,8 @@ def write_ini(m, path, buffer_ms=200):
     if any(j["rotary"] for j in joints):
         w("DEFAULT_ANGULAR_VELOCITY = %s" % fmt(max(j["vel"] for j in joints if j["rotary"]) * 0.25))
         w("MAX_ANGULAR_VELOCITY = %s" % fmt(max(j["vel"] for j in joints if j["rotary"])))
+    if m.get("lathe"):
+        w("LATHE = 1")
     w("INTRO_GRAPHIC = linuxcnc.gif")
     w("INTRO_TIME = 3")
     w("PROGRAM_PREFIX = ~/linuxcnc/nc_files")
@@ -253,6 +289,8 @@ def write_ini(m, path, buffer_ms=200):
     w("JOINTS = %d" % len(joints))
     w("")
     w("[FILTER]")
+    w("# Programs written for other controls (Mach3's .tap ...) are offered when opening a file")
+    w("PROGRAM_EXTENSION = .tap,.nc,.cnc,.txt,.gcode G-code from other programs")
     w("PROGRAM_EXTENSION = .py Python Script")
     w("py = python3")
     w("")
@@ -262,7 +300,9 @@ def write_ini(m, path, buffer_ms=200):
     w("")
     w("[RS274NGC]")
     w("PARAMETER_FILE = linuxcnc.var")
-    w("RS274NGC_STARTUP_CODE = %s G40 G90 G94 G97 G64 P%s" % ("G20" if m["inch"] else "G21", "0.001" if m["inch"] else "0.025"))
+    plane = " G18 %s" % ("G7" if m.get("diameter") else "G8") if m.get("lathe") else ""
+    w("RS274NGC_STARTUP_CODE = %s%s G40 G90 G94 G97 G64 P%s" % ("G20" if m["inch"] else "G21", plane,
+                                                                "0.001" if m["inch"] else "0.025"))
     w("")
     w("[EMCMOT]")
     w("EMCMOT = motmod")
@@ -326,6 +366,7 @@ def write_ini(m, path, buffer_ms=200):
     w("MAX_LINEAR_VELOCITY = %s" % fmt(top))
     w("")
 
+    outs = outputs(m)
     for n, j in enumerate(joints):
         if j["letter"] not in axes_done:
             axes_done.add(j["letter"])
@@ -337,7 +378,7 @@ def write_ini(m, path, buffer_ms=200):
             w("")
         ferror = max(j["vel"] * lag, small)
         w("[JOINT_%d]" % n)
-        w("# %s%s, on the controller's %s output" % (j["letter"], " (second motor)" if j["second"] else "", LETTERS[n]))
+        w("# %s%s, on the controller's %s output" % (j["letter"], " (second motor)" if j["second"] else "", LETTERS[outs[n]]))
         w("TYPE = %s" % ("ANGULAR" if j["rotary"] else "LINEAR"))
         w("SCALE = %s" % fmt(j["scale"]))
         w("STEP_INVERT = 0")
@@ -368,7 +409,8 @@ def write_ini(m, path, buffer_ms=200):
             w("HOME_OFFSET = 0")
             w("HOME = 0")
         twin = any(o is not j and o["letter"] == j["letter"] for o in joints)
-        sequence = 0 if j["letter"] == "Z" else 1
+        # Z first on a mill (up, out of the work); X first on a lathe (out from the work)
+        sequence = 0 if j["letter"] == ("X" if m.get("lathe") else "Z") else 1
         w("HOME_SEQUENCE = %d" % (-sequence if twin and sequence else sequence))
         w("")
 
@@ -378,6 +420,8 @@ def write_ini(m, path, buffer_ms=200):
 
 def write_hal(m, path):
     joints = m["joints"]
+    outs = outputs(m)
+    in_order = outs == list(range(len(joints)))
     out = []
     w = out.append
     w("# Tiggy motion controller - HAL connections")
@@ -385,7 +429,13 @@ def write_hal(m, path):
     w("")
     w("loadrt [KINS]KINEMATICS")
     w("loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS")
-    w("loadrt tiggy ip=[TIGGY]ADDRESS joints=[KINS]JOINTS" + (" io_ip=[TIGGY]IO_MODULE" if m["io_module"] else ""))
+    if not in_order:
+        w("# The driver's joints are the controller's motor outputs (%s here); each of LinuxCNC's"
+          % ", ".join("%d = %s" % (o, LETTERS[o]) for o in range(max(outs) + 1)))
+        w("# joints is connected to the output its motor is on (%s)."
+          % ", ".join("%s on %s" % (j["letter"], LETTERS[o]) for j, o in zip(joints, outs)))
+    w("loadrt tiggy ip=[TIGGY]ADDRESS joints=%s" % ("[KINS]JOINTS" if in_order else "%d" % (max(outs) + 1))
+      + (" io_ip=[TIGGY]IO_MODULE" if m["io_module"] else ""))
     w("loadrt estop_latch")
     w("")
     w("addf tiggy.read             servo-thread")
@@ -424,15 +474,17 @@ def write_hal(m, path):
     w("")
     for n, j in enumerate(joints):
         tag = j["letter"].lower() + ("2" if j["second"] else "")
-        w("# --- joint %d: %s%s ---" % (n, j["letter"], ", second motor" if j["second"] else ""))
-        w("setp tiggy.%d.position-scale [JOINT_%d]SCALE" % (n, n))
-        w("setp tiggy.%d.maxvel         [JOINT_%d]MAX_VELOCITY" % (n, n))
-        w("setp tiggy.%d.maxaccel       [JOINT_%d]MAX_ACCELERATION" % (n, n))
-        w("setp tiggy.%d.step-invert    [JOINT_%d]STEP_INVERT" % (n, n))
-        w("setp tiggy.%d.dir-invert     [JOINT_%d]DIR_INVERT" % (n, n))
-        w("net %s-pos-cmd joint.%d.motor-pos-cmd => tiggy.%d.position-cmd" % (tag, n, n))
-        w("net %s-pos-fb  tiggy.%d.position-fb   => joint.%d.motor-pos-fb" % (tag, n, n))
-        w("net %s-homing  joint.%d.homing        => tiggy.%d.homing" % (tag, n, n))
+        o = outs[n]
+        w("# --- joint %d: %s%s%s ---" % (n, j["letter"], ", second motor" if j["second"] else "",
+                                         "" if in_order else ", on motor output %s" % LETTERS[o]))
+        w("setp tiggy.%d.position-scale [JOINT_%d]SCALE" % (o, n))
+        w("setp tiggy.%d.maxvel         [JOINT_%d]MAX_VELOCITY" % (o, n))
+        w("setp tiggy.%d.maxaccel       [JOINT_%d]MAX_ACCELERATION" % (o, n))
+        w("setp tiggy.%d.step-invert    [JOINT_%d]STEP_INVERT" % (o, n))
+        w("setp tiggy.%d.dir-invert     [JOINT_%d]DIR_INVERT" % (o, n))
+        w("net %s-pos-cmd joint.%d.motor-pos-cmd => tiggy.%d.position-cmd" % (tag, n, o))
+        w("net %s-pos-fb  tiggy.%d.position-fb   => joint.%d.motor-pos-fb" % (tag, o, n))
+        w("net %s-homing  joint.%d.homing        => tiggy.%d.homing" % (tag, n, o))
         if j["home_switch"] or j["limit_switch"]:
             # A switch used for homing is not also given to LinuxCNC as a limit:
             # the machine runs a moment behind LinuxCNC, so it is still leaving
@@ -442,8 +494,8 @@ def write_hal(m, path):
                 users = ["joint.%d.home-sw-in" % n]
             else:
                 users = ["joint.%d.neg-lim-sw-in" % n, "joint.%d.pos-lim-sw-in" % n]
-            own = j["switch_input"] == n
-            source = "tiggy.switch.%d => " % n if own else ""       # a shared switch is already on its net
+            own = j["switch_input"] == o
+            source = "tiggy.switch.%d => " % o if own else ""       # a shared switch is already on its net
             name = tag if own else j["letter"].lower()
             w("net %s-switch  %s%s" % (name, source, " ".join(users)))
             if j["limit_switch"] and own:
@@ -453,7 +505,7 @@ def write_hal(m, path):
                     w("# not given it as a limit: see the note on limit switches in the driver's README.)")
                 else:
                     w("# the controller itself stops, within milliseconds, when this switch operates")
-                w("setp tiggy.switch.%d-is-limit 1" % n)
+                w("setp tiggy.switch.%d-is-limit 1" % o)
         w("")
     w("# --- spindle and coolant ---")
     if m["spindle"] != "n":
@@ -489,7 +541,8 @@ def write_hal(m, path):
     w("#     net light motion.digital-out-00 => tiggy.output.0        (M64 P0 / M65 P0)")
     w("# tiggy.input.0 to .3     its auxiliary inputs (and -not), e.g.")
     w("#     net door tiggy.input.0 => motion.digital-in-00           (M66 P0)")
-    w("# tiggy.estop-input       its E-stop input; tiggy.spindle-speed-fb the spindle encoder (rev/s)")
+    w("# tiggy.estop-input       its E-stop input; tiggy.spindle-speed-fb the spindle sensor (rev/s),")
+    w("#                         tiggy.spindle-turns and tiggy.spindle-angle what it counts")
     w("# tiggy.buffer-ms, tiggy.underruns, tiggy.segments-resent      how the link is doing")
     with open(path, "w", newline="\n") as f:
         f.write("\n".join(out) + "\n")
@@ -511,9 +564,38 @@ def write_postgui(m, path):
         f.write("\n".join(out) + "\n")
 
 
+def folder_name(name):
+    """The name of a machine as the name of its folder and INI file."""
+    return "".join(c if c.isalnum() or c in "-_" else "_" for c in name) or "Tiggy"
+
+
+def write_config(m, folder):
+    """Writes the whole configuration for machine m into folder.  Returns the INI file's path."""
+    safe = folder_name(m["name"])
+    ini = os.path.join(folder, safe + ".ini")
+    os.makedirs(folder, exist_ok=True)
+    write_ini(m, ini)
+    write_hal(m, os.path.join(folder, "tiggy.hal"))
+    postgui = os.path.join(folder, "postgui.hal")
+    if not os.path.exists(postgui):             # (the place for the user's own additions: never replaced)
+        write_postgui(m, postgui)
+    tool = os.path.join(folder, "tool.tbl")
+    if not os.path.exists(tool):
+        with open(tool, "w", newline="\n") as f:
+            if m.get("lathe"):
+                f.write("T1 P1 X0 Z0 D%s Q2 ;example turning tool\n" % ("0.03" if m["inch"] else "0.8"))
+            else:
+                f.write("T1 P1 Z0 D%s ;example tool\n" % ("0.125" if m["inch"] else "3"))
+    with open(os.path.join(folder, "tiggy.json"), "w", newline="\n") as f:
+        json.dump(m, f, indent=1, sort_keys=True)
+        f.write("\n")
+    return ini
+
+
 def main():
     ap = argparse.ArgumentParser(description="Writes a LinuxCNC configuration for the Tiggy motion controller")
     ap.add_argument("--defaults", action="store_true", help="do not ask: a plain 3-axis machine")
+    ap.add_argument("--lathe", action="store_true", help="with --defaults: a plain lathe, X and Z")
     ap.add_argument("--name", help="name of the machine (with --defaults)")
     ap.add_argument("--address", help="address of the controller (with --defaults)")
     ap.add_argument("--dir", help="folder to write to (default ~/linuxcnc/configs/<name>)")
@@ -526,7 +608,7 @@ def main():
     if not args.defaults:
         print("Tiggy motion controller - LinuxCNC set-up")
         print("Press Enter to accept the value shown in [brackets].")
-    m = ask_machine(Asker(args.defaults))
+    m = ask_machine(Asker(args.defaults, lathe=args.lathe, sensor=args.spindle_sensor))
     if args.name:
         m["name"] = args.name
     if args.address:
@@ -536,20 +618,13 @@ def main():
     if args.spindle_sensor:
         m["threading"] = True
 
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in m["name"]) or "Tiggy"
+    safe = folder_name(m["name"])
     folder = args.dir or os.path.join(os.path.expanduser("~"), "linuxcnc", "configs", safe)
     ini = os.path.join(folder, safe + ".ini")
     if os.path.exists(ini) and not args.defaults:
         if not Asker(False).yes("\n%s exists. Replace it" % ini, False):
             sys.exit("Nothing written.")
-    os.makedirs(folder, exist_ok=True)
-    write_ini(m, ini)
-    write_hal(m, os.path.join(folder, "tiggy.hal"))
-    write_postgui(m, os.path.join(folder, "postgui.hal"))
-    tool = os.path.join(folder, "tool.tbl")
-    if not os.path.exists(tool):
-        with open(tool, "w", newline="\n") as f:
-            f.write("T1 P1 Z0 D%s ;example tool\n" % ("0.125" if m["inch"] else "3"))
+    write_config(m, folder)
 
     print("\nConfiguration written to %s" % folder)
     print("Start LinuxCNC with:\n    linuxcnc %s" % ini)

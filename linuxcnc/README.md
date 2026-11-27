@@ -17,23 +17,53 @@ cd linuxcnc-package
 ./install.sh
 ```
 
-`install.sh` builds the driver, installs it among LinuxCNC's HAL components
-and then starts the set-up wizard, which asks about the machine (axes, steps
-per unit, speeds, travel, switches, spindle) and writes a complete
-configuration to `~/linuxcnc/configs/<name>`. Start LinuxCNC with it:
+`install.sh` builds the driver, installs it among LinuxCNC's HAL components,
+puts **Tiggy set-up for LinuxCNC** in the menu and starts it.
+`./install.sh --driver` only rebuilds the driver, for example after an update.
+
+## Setting up a machine
+
+The set-up program (`tiggy_config.py`) does what the Config menu does in
+Mach3, with the controller connected:
+
+| Page | |
+|---|---|
+| Controller | Finds the controllers on the network. Pick yours and connect; its address goes into the configuration. |
+| Machine | Its name, mill/router or lathe, millimetres or inches, and which axis the motor on each output drives (two outputs for an axis with two motors). A lathe has X on output X and Z on output Z. |
+| Motors | Steps per unit, top speed, acceleration and travel of each axis. The ramp is drawn, and the step rate checked against what the controller can make. **Try it** runs the motor from the page with those values; measure how far it really went, and the steps per unit are corrected for you. |
+| Switches | What the switch on each input is - home, limit, both - with a lamp that shows the input as it is now, so a switch can be operated by hand and watched. Probe and E-stop likewise. |
+| Spindle | On and off, or speed by PWM, with a test. The spindle sensor for screw cutting and what the controller's terminals are used for (six axes, or four and the encoder's inputs): these two are kept in the controller itself and are sent from here. |
+| Finish | What will be written. |
+
+**Save** writes the configuration to `~/linuxcnc/configs/<name>`; **Save and
+start LinuxCNC** starts it as well:
 
 ```bash
 linuxcnc ~/linuxcnc/configs/Tiggy/Tiggy.ini
 ```
 
-- `./install.sh --driver` only rebuilds the driver, for example after an update.
-- `python3 tiggy_setup.py` runs the wizard again; `--defaults` writes a plain
-  3-axis machine without asking.
+The program opens a configuration again to change it. Numbers changed in the
+INI file by hand since - steps, speeds, travels, the controller's address -
+are kept; the files it replaces are left beside the new ones with `.before`
+added, and `postgui.hal`, the place for your own additions, is never touched.
+A controller works for one program at a time, so LinuxCNC has to be closed
+while the set-up program is connected to it.
 
-Everything the wizard asked can be changed later in the INI file. The
-controller's own settings are in its `[TIGGY]` section and are passed on to
-the controller each time LinuxCNC starts, so there is nothing to set up on
-the controller itself beyond joining it to your network.
+Without a screen, `python3 tiggy_setup.py` asks the same questions in a
+terminal (`--defaults` writes a plain 3-axis machine without asking,
+`--defaults --lathe` a plain lathe).
+
+Everything can also be changed in the INI file. The controller's settings are
+in its `[TIGGY]` section and are passed on to the controller each time
+LinuxCNC starts; only the spindle sensor and the use of the terminals are set
+on the controller itself, from the Spindle page.
+
+### A lathe
+
+X and Z go on the controller's X and Z outputs, with their switches on the
+X and Z inputs. X positions are diameters (G7) unless you say otherwise, the
+plane is G18, and with a spindle sensor G33 and the G76 threading cycle work
+(see below). The screen is LinuxCNC's lathe screen.
 
 ### Finding the controller
 
@@ -76,8 +106,8 @@ later. In practice:
   controller's own stop guards the limit instead.
 - **Screw cutting (G33, G76)** works with a spindle sensor on the controller:
   an encoder, with or without an index pulse, or a single sensor giving one
-  pulse per revolution (set the terminal layout and the kind of sensor on the
-  controller first; answer yes to the wizard's question about it).  LinuxCNC
+  pulse per revolution (set on the Spindle page of the set-up program, which
+  sends it to the controller).  LinuxCNC
   follows the spindle's position, but the motors are a fifth of a second
   behind LinuxCNC, so the real spindle will not do for that.  The driver
   shows LinuxCNC a smooth copy of the spindle instead (`tiggy.spindle-revs`),
@@ -141,6 +171,7 @@ Loaded with `loadrt tiggy ip=<address or auto> joints=<1-6> [io_ip=<address or a
 | `tiggy.spindle-speed-fb`, `-fb-rpm` | float out | spindle encoder, rev/s and rpm |
 | `tiggy.spindle-revs` | float out | for `spindle.0.revs`: the copy of the spindle LinuxCNC follows in G33 and G76 |
 | `tiggy.spindle-index-enable` | bit io | for `spindle.0.index-enable` |
+| `tiggy.spindle-turns`, `tiggy.spindle-angle` | u32, float out | the controller's own reading of its spindle sensor: turns counted, and how far round the turn it is (0 to 1). They come from the same status report as the joints' `counts`: for checking a sensor, or how a thread lies on the spindle |
 | `tiggy.coolant-flood`, `-mist` | bit in | coolant |
 | `tiggy.buffer-ms` | float out | motion queued at this moment |
 | `tiggy.underruns` | u32 out | times the queue ran short |

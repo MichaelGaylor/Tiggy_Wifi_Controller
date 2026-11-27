@@ -62,12 +62,12 @@ pio run -e esp32s3-zero -t upload       # Tiggy Standard board (3 wired axes)
 sudo apt install linuxcnc-uspace linuxcnc-uspace-dev   # already there on the LinuxCNC live image
 tar xzf Tiggy-LinuxCNC.tar.gz
 cd linuxcnc-package
-./install.sh    # builds the driver, then asks about your machine
+./install.sh    # builds the driver, then starts the set-up program
 ```
 
 Or double-click `install.desktop` from your file manager.
 
-The installer writes a complete configuration to `~/linuxcnc/configs`. No realtime kernel is needed: LinuxCNC plans the motion and the controller makes the step pulses. What to expect, and every pin and setting of the `tiggy` driver, is in [linuxcnc/README.md](linuxcnc/README.md).
+The set-up program ("Tiggy set-up for LinuxCNC" in the menu afterwards) finds the controller on the network and sets up a mill, router or lathe with it connected, in the manner of Mach3's Config menu: which axis each motor output drives, motor tuning with the motor running from the page, switches with a lamp for each input, the spindle and its sensor. It writes a complete configuration to `~/linuxcnc/configs` and starts LinuxCNC with it. No realtime kernel is needed: LinuxCNC plans the motion and the controller makes the step pulses. What to expect, and every pin and setting of the `tiggy` driver, is in [linuxcnc/README.md](linuxcnc/README.md).
 
 ### Mach3 (Windows)
 
@@ -147,7 +147,9 @@ The LinuxCNC driver is tested the same way. It builds, unchanged, around a stand
 ```bash
 linuxcnc/test/build.sh                    # or build.bat on Windows
 python tools/linuxcnc_driver_test.py      # moves to the step, packet loss, a stalling PC, E-stop, limits, reconnection
-linuxcnc/test/run_in_linuxcnc.sh          # the same driver inside a real LinuxCNC (Linux with linuxcnc-uspace-dev)
+linuxcnc/test/run_in_linuxcnc.sh          # the same driver inside a real LinuxCNC (Linux with linuxcnc-uspace-dev):
+                                          # a mill, home switches, G33, and a lathe with G33 and a G76 cycle
+xvfb-run -a python3 linuxcnc/test/config_test.py     # the set-up program, worked from its pages against the simulator
 ```
 
 

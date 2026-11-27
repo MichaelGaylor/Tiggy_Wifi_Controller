@@ -32,7 +32,7 @@ chmod +x "$HERE/linuxcnc_session.py"
 export TIGGY_TEST_RESULT="$WORK/result.txt"
 STATUS=0
 
-run_plan() {    # name of the plan, folder of its configuration, [options for the simulator]
+run_plan() {    # name of the plan, folder of its configuration, [options for the simulator], [motor outputs of the joints]
     local ini
     ini="$(ls "$2"/*.ini)"
     # No screen: the test session takes its place, and there is no start-up picture
@@ -45,7 +45,7 @@ run_plan() {    # name of the plan, folder of its configuration, [options for th
     # temporary files and delete them
     local code=0
     rm -f "$HOME/linuxcnc_debug.txt" "$HOME/linuxcnc_print.txt"
-    TIGGY_TEST_PLAN="$1" timeout 900 linuxcnc -r "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || code=$?
+    TIGGY_TEST_PLAN="$1" TIGGY_TEST_OUTPUTS="${4:-0,1,2}" timeout 900 linuxcnc -r "$ini" > "$WORK/linuxcnc_$1.log" 2>&1 || code=$?
     kill "$SIM_PID" 2>/dev/null || true
     wait "$SIM_PID" 2>/dev/null || true
     SIM_PID=""
@@ -68,7 +68,7 @@ python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --name TiggyTest --address 12
 run_plan basic "$WORK/basic"
 
 # The same with home switches: X and Y home and limit at the low end, Z home at the top
-printf '%s\n' TiggySwitches 127.0.0.1 mm XYZ n \
+printf '%s\n' TiggySwitches 127.0.0.1 mm m XYZ n \
     800 50 500 0 300 n b n n \
     800 50 500 0 300 n b n n \
     800 50 500 -100 0 n h n y \
@@ -79,6 +79,11 @@ printf '%s\n' TiggySwitches 127.0.0.1 mm XYZ n \
 python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --spindle-sensor --name TiggyThread --address 127.0.0.1 \
     --no-toolchange-prompt --dir "$WORK/threading" > /dev/null
 [ $STATUS -eq 0 ] && run_plan threading "$WORK/threading" "--encoder 1024"
+
+# A lathe: X and Z, on the controller's X and Z outputs; diameters, G33 and a G76 cycle
+python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --lathe --spindle-sensor --name TiggyLathe --address 127.0.0.1 \
+    --no-toolchange-prompt --dir "$WORK/lathe" > /dev/null
+[ $STATUS -eq 0 ] && run_plan lathe "$WORK/lathe" "--encoder 1024" "0,2"
 
 echo
 cat "$TIGGY_TEST_RESULT" 2>/dev/null || echo "LinuxCNC produced no results"

@@ -88,7 +88,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            linuxcnc-uspace linuxcnc-uspace-dev build-essential python3 sudo git ca-certificates procps
+            linuxcnc-uspace linuxcnc-uspace-dev build-essential python3 python3-tk xvfb sudo git ca-certificates procps
 
       - uses: actions/checkout@v4
 
@@ -103,6 +103,9 @@ jobs:
           bash linuxcnc/test/ci_step.sh "Simulator build" sudo -u tester -H sh firmware/test/pc/build.sh
           bash linuxcnc/test/ci_step.sh "Driver build with gcc" sudo -u tester -H sh linuxcnc/test/build.sh
           bash linuxcnc/test/ci_step.sh "Driver against the simulator" sudo -u tester -H python3 tools/linuxcnc_driver_test.py -v --lenient
+
+      - name: Set-up program
+        run: bash linuxcnc/test/ci_step.sh "Set-up program" sudo -u tester -H xvfb-run -a python3 linuxcnc/test/config_test.py
 
       - name: Driver inside LinuxCNC
         run: bash linuxcnc/test/ci_step.sh "Driver inside LinuxCNC" sudo -u tester -H bash linuxcnc/test/run_in_linuxcnc.sh
@@ -119,6 +122,8 @@ jobs:
           mkdir -p linuxcnc-package
           cp linuxcnc/tiggy.c linuxcnc-package/
           cp linuxcnc/tiggy_setup.py linuxcnc-package/
+          cp linuxcnc/tiggy_config.py linuxcnc-package/
+          cp linuxcnc/tiggy_link.py linuxcnc-package/
           cp linuxcnc/install.sh linuxcnc-package/
           cp linuxcnc/install.desktop linuxcnc-package/
           cp linuxcnc/README.md linuxcnc-package/
@@ -126,6 +131,7 @@ jobs:
           chmod +x linuxcnc-package/install.sh
           chmod +x linuxcnc-package/install.desktop
           chmod +x linuxcnc-package/tiggy_setup.py
+          chmod +x linuxcnc-package/tiggy_config.py
 
       - name: Upload LinuxCNC package
         uses: actions/upload-artifact@v4
