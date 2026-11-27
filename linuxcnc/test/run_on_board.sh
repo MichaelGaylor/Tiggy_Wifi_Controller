@@ -10,11 +10,20 @@
 # (LinuxCNC, Mach3) talking to the controller.
 #
 #   linuxcnc/test/run_on_board.sh <address> --motion [minutes of long run, default 2]
+#   linuxcnc/test/run_on_board.sh <address> --motion --threading
 #
 # --motion says that the axes are free to move: a bare board, or a machine
 # with 60 mm clear on X and Y and 10 mm below Z.  The controller keeps the
 # settings LinuxCNC gives it (step pulse 5 us, 800 steps/mm at 50 mm/s) until
 # another host sets its own.
+#
+# --threading cuts threads instead (G33 passes, a G76 cycle), on a bare board
+# with one wire on it: the X step terminal linked to the terminal of the
+# single spindle sensor (GPIO 1 to GPIO 21 on the ESP32-S3-DevKitC), and
+# nothing else on the X step and spindle terminals.  For the test those two
+# terminals change places in the controller's settings, so that the wire
+# carries the spindle PWM: LinuxCNC's M3 then starts a spindle of 3180 rpm
+# that the sensor reads.  The settings are put back at the end.
 #
 # Exit status 0 when every step passed.
 
@@ -23,16 +32,18 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 
 ADDRESS=""
 MOTION=""
+THREADING=""
 MINUTES="2"
 for arg in "$@"; do
     case "$arg" in
         --motion) MOTION=1 ;;
+        --threading) THREADING=1 ;;
         -*) echo "ERROR: unknown option $arg"; exit 2 ;;
         *) if [ -z "$ADDRESS" ]; then ADDRESS="$arg"; else MINUTES="$arg"; fi ;;
     esac
 done
 if [ -z "$ADDRESS" ] || [ -z "$MOTION" ]; then
-    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
 
@@ -45,13 +56,34 @@ if pgrep -x linuxcncsvr >/dev/null 2>&1; then
 fi
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+PREPARED=""
+cleanup() {
+    if [ -n "$PREPARED" ]; then
+        echo "=== the controller's settings ==="
+        python3 "$HERE/board_prepare.py" restore "$ADDRESS" "$WORK/controller.json"
+    fi
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 echo "=== driver ==="
 TIGGY_IN_TERMINAL=1 bash "$ROOT/linuxcnc/install.sh" --driver || exit 2
 
-python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --name TiggyBoard --address "$ADDRESS" \
-    --no-toolchange-prompt --dir "$WORK/cfg" > /dev/null || exit 2
+if [ -n "$THREADING" ]; then
+    echo "=== the controller's settings ==="
+    python3 "$HERE/board_prepare.py" prepare "$ADDRESS" "$WORK/controller.json" || exit 2
+    PREPARED=1
+    python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --spindle-sensor --name TiggyBoard --address "$ADDRESS" \
+        --no-toolchange-prompt --dir "$WORK/cfg" > /dev/null || exit 2
+    # The spindle is the PWM signal itself: 53 Hz is 3180 rpm, whatever its duty (half, at S3180)
+    sed -i -e "s|^SPINDLE_PWM = .*|SPINDLE_PWM = 1|" -e "s|^SPINDLE_PWM_FREQ = .*|SPINDLE_PWM_FREQ = 53|" \
+        -e "s|^SPINDLE_MAX_RPM = .*|SPINDLE_MAX_RPM = 6360|" "$WORK"/cfg/*.ini
+    export TIGGY_TEST_PLAN=threading
+else
+    python3 "$ROOT/linuxcnc/tiggy_setup.py" --defaults --name TiggyBoard --address "$ADDRESS" \
+        --no-toolchange-prompt --dir "$WORK/cfg" > /dev/null || exit 2
+    export TIGGY_TEST_PLAN=moves
+fi
 ini="$(ls "$WORK"/cfg/*.ini)"
 chmod +x "$HERE/board_session.py"
 # No screen: the test session takes its place, and there is no start-up picture

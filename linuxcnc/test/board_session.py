@@ -19,8 +19,25 @@ controller's own word is all there is, and nothing is connected to it.)
 Motors, if there are any, move some 60 mm on X and Y and 10 mm down on Z
 from where they stand, at up to 50 mm/s.
 
+With TIGGY_TEST_PLAN=threading it cuts threads instead: G33 passes and a G76
+cycle on Z, against a spindle that run_on_board.sh has arranged - the
+controller's own spindle PWM output linked to its single spindle sensor, so
+that LinuxCNC's M3 starts a 'spindle' of 3180 rpm that the axes have no part
+in.  Every status report made during a pass gives Z's count and the
+controller's reading of the spindle from the same moment (tiggy.2.counts,
+tiggy.spindle-turns, tiggy.spindle-angle): Z must keep its place on the
+spindle through each pass - also while the spindle's speed is changed in the
+middle of one - and every pass must have the same place.  (Each pass begins
+at the same spindle speed.  With LinuxCNC, on any machine, where a pass lies
+on the work depends on the speed it began at: the axis takes a distance to
+reach the spindle's speed that grows with it.)
+
+TIGGY_TEST_PLAN     moves (default) or threading
 TIGGY_TEST_RESULT   file the results are written to
 TIGGY_TEST_MINUTES  length of the long run at the end (default 2)
+TIGGY_TEST_SPEED_BY S (only against the simulator, whose spindle goes by the
+                    speed asked for, not by the frequency of a PWM signal;
+                    the change of speed in mid-pass is then left out)
 """
 
 import math
@@ -31,9 +48,13 @@ import time
 import hal
 import linuxcnc
 
+PLAN = os.environ.get("TIGGY_TEST_PLAN", "moves")
 RESULT = os.environ.get("TIGGY_TEST_RESULT", "")
 MINUTES = float(os.environ.get("TIGGY_TEST_MINUTES", "2"))
+SPEED_BY_S = os.environ.get("TIGGY_TEST_SPEED_BY", "") == "S"
 JOINTS = 3
+Z = 2
+HZ, HZ_OTHER = 53, 59                   # the spindle, turns a second: as planned for, and changed to
 
 
 class Failure(Exception):
@@ -294,9 +315,150 @@ class Session:
                                              int(self.pin("tiggy.underruns")), int(self.pin("tiggy.segments-resent"))))
         self.healthy("long run")
 
+    # ---- screw cutting
+    def reading(self):
+        """(Z count, spindle turns) from one status report: the pins are read twice, and taken
+        when the spindle's did not change in between."""
+        for _ in range(200):
+            a = (self.pin("tiggy.spindle-turns"), self.pin("tiggy.spindle-angle"))
+            z = int(self.pin("tiggy.%d.counts" % Z))
+            if a == (self.pin("tiggy.spindle-turns"), self.pin("tiggy.spindle-angle")):
+                return z, a[0] + a[1]
+        raise Failure("the spindle's reading changes faster than it can be read")
+
+    def spindle_at(self, hz, first=False):
+        """Bring the spindle to hz turns a second, and wait until LinuxCNC sees it there."""
+        if first or SPEED_BY_S:
+            self.mdi("M3 S%d" % (60 * (hz if SPEED_BY_S else HZ)))
+        if not SPEED_BY_S:
+            hal.set_p("tiggy.spindle-pwm-freq", "%d" % hz)      # the 'spindle' is the PWM signal itself
+        try:
+            self.wait_for(lambda: abs(self.pin("tiggy.spindle-speed-fb-rpm") - 60.0 * hz) < 60.0 * hz * 0.02, 10,
+                          "the spindle to reach %d rpm" % (60 * hz))
+        except Failure:
+            raise Failure("the spindle is read as %d rpm, not %d: is the spindle output linked to the sensor input?"
+                          % (self.pin("tiggy.spindle-speed-fb-rpm"), 60 * hz))
+        time.sleep(1.5)
+
+    def cut(self, text, timeout=120, at=None, then=None):
+        """An MDI command, with the readings taken while it is carried out.
+        at, then: once Z has gone 'at' steps, call then()."""
+        self.mode(linuxcnc.MODE_MDI)
+        top = int(self.pin("tiggy.%d.counts" % Z))
+        self.c.mdi(text)
+        seen, last = [], None
+        deadline = time.time() + timeout
+        while self.c.wait_complete(0.002) == -1:
+            check(time.time() < deadline, "'%s' did not finish" % text)
+            r = self.reading()
+            if r != last:
+                seen.append(r)
+                last = r
+            if then and top - r[0] >= at:
+                then()
+                then = None
+        check(not any("error" in e.lower() or "abort" in e.lower() for e in self.errors()), "'%s' was not carried out" % text)
+        self.settle()
+        return seen
+
+    def passes(self, seen, per_rev, length):
+        """The passes in a list of readings: runs of Z going down for most of 'length' steps.
+        Returns for each (readings used, spread of Z about its place on the spindle, that place)."""
+        runs, first = [], None
+        for i in range(1, len(seen)):
+            cutting = seen[i][0] < seen[i - 1][0]
+            if cutting and first is None:
+                first = i - 1
+            elif not cutting and first is not None:
+                if seen[first][0] - seen[i - 1][0] > 0.5 * length:
+                    runs.append((first, i))
+                first = None
+        if first is not None and seen[first][0] - seen[-1][0] > 0.5 * length:
+            runs.append((first, len(seen)))
+        out = []
+        for a, b in runs:
+            top = seen[a][0]
+            # the part cut at the pitch: clear of the run up to speed and of the end
+            part = [(z, t) for z, t in seen[a:b] if 0.25 * length < top - z < 0.9 * length]
+            check(len(part) > 10, "only %d readings in a pass" % len(part))
+            res = [z + per_rev * t for z, t in part]
+            out.append((len(part), max(res) - min(res), (sum(res) / len(res)) % per_rev))
+        return out
+
+    def judge(self, found, per_rev, what):
+        worst = max(spread for _n, spread, _place in found)
+        apart = max(abs((place - found[0][2] + per_rev / 2.0) % per_rev - per_rev / 2.0) for _n, _s, place in found)
+        self.lines.append("      %s: %d passes, %s readings each; Z within %.1f steps of its place on the spindle, "
+                          "the passes within %.1f steps of the first (a turn is %d steps)" % (
+                              what, len(found), "-".join(str(n) for n in sorted({found[0][0], found[-1][0]})), worst, apart, per_rev))
+        check(worst <= 4.0, "%s: Z wanders %.1f steps against the spindle's angle" % (what, worst))
+        check(apart <= 0.02 * per_rev, "%s: a pass begins %.1f steps (%.1f degrees) from the first: the threads do not "
+              "line up" % (what, apart, apart / per_rev * 360.0))
+
+    def step_spindle(self):
+        self.spindle_at(HZ, first=True)
+        a = self.reading()[1]
+        time.sleep(2.0)
+        rate = (self.reading()[1] - a) / 2.0
+        check(abs(rate - HZ) <= 0.03 * HZ, "the spindle sensor counts %.1f turns a second at %d rpm" % (rate, 60 * HZ))
+        self.lines.append("      spindle read as %d rpm, %.1f turns a second counted" % (self.pin("tiggy.spindle-speed-fb-rpm"), rate))
+        self.healthy("spindle")
+
+    def step_g33(self):
+        # Three passes of some 80 turns at a pitch of 0.49 mm (392 steps a turn: not a round number
+        # of steps between two status reports, which would all fall at the same place in a step).
+        # In the second the spindle goes from
+        # 3180 to 3540 rpm a third of the way along.
+        pitch, depth = 0.49, 40.0
+        per_rev = pitch * abs(self.scale[Z])
+        length = per_rev * depth / pitch
+        z0 = round(self.poll().position[2], 4)
+        found, fastest = [], 0
+        for n in range(3):
+            self.spindle_at(HZ)
+            faster = None
+            if n == 1 and not SPEED_BY_S:
+                faster = lambda: hal.set_p("tiggy.spindle-pwm-freq", "%d" % HZ_OTHER)     # noqa: E731
+            seen = self.cut("G33 Z%g K%g" % (z0 - depth, pitch), at=length / 3, then=faster)
+            fastest = max(fastest, int(self.pin("tiggy.spindle-speed-fb-rpm")))
+            self.check_position("after a G33 pass")
+            got = self.passes(seen, per_rev, length)
+            check(len(got) == 1, "a G33 pass shows as %d passes in Z's readings" % len(got))
+            found += got
+            self.mdi("G0 Z%g" % z0)
+            self.check_position("back at the start")
+        if not SPEED_BY_S:
+            check(fastest > 60 * HZ * 1.05, "the spindle's speed did not change in the second pass (%d rpm)" % fastest)
+            self.lines.append("      in the second pass the spindle went from %d to %d rpm" % (60 * HZ, fastest))
+        self.judge(found, per_rev, "G33")
+        self.healthy("G33")
+
+    def step_g76(self):
+        # A threading cycle: three passes, each 0.1 mm deeper, and a spring pass
+        pitch, depth = 0.49, 40.0
+        per_rev = pitch * abs(self.scale[Z])
+        self.spindle_at(HZ)
+        z0 = round(self.poll().position[2], 4)
+        self.mdi("G18")
+        self.mdi("G0 X10")
+        seen = self.cut("G76 P%g Z%g I-0.2 J0.1 K0.3 H1" % (pitch, z0 - depth), timeout=300)
+        self.check_position("after G76")
+        found = self.passes(seen, per_rev, per_rev * depth / pitch)
+        check(len(found) == 4, "the G76 cycle shows as %d passes in Z's readings, not 4" % len(found))
+        self.judge(found, per_rev, "G76")
+        self.mdi("M5")
+        self.mdi("G17")
+        self.mdi("G0 X0")
+        self.check_position("back at the start")
+        self.healthy("G76")
+
     def run(self):
-        for fn in (self.step_ready, self.step_on_and_home, self.step_mdi, self.step_program,
-                   self.step_jog_and_abort, self.step_estop, self.step_long_run):
+        plans = {
+            "moves": (self.step_ready, self.step_on_and_home, self.step_mdi, self.step_program,
+                      self.step_jog_and_abort, self.step_estop, self.step_long_run),
+            "threading": (self.step_ready, self.step_on_and_home, self.step_spindle, self.step_g33, self.step_g76),
+        }
+        for fn in plans[PLAN]:
             name = fn.__name__[5:]
             t0 = time.time()
             try:

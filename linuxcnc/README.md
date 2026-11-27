@@ -117,7 +117,11 @@ later. In practice:
   whatever the speed does under the cut.  What this means in practice:
   - Every pass begins at the same place on the work, as LinuxCNC's own
     encoder handling would have it.  As always with LinuxCNC, begin the pass
-    clear of the work: the axis needs a moment to reach the spindle's speed.
+    clear of the work - the axis needs a moment to reach the spindle's speed -
+    and begin every pass at the same spindle speed: the distance that takes
+    grows with the speed, and with it moves the place where the thread
+    begins.  (What the speed does once the pass is under way does not
+    matter.)
   - From the start of a pass until the machine next stands still, everything
     is played by the spindle - the way out and back as well.  If LinuxCNC
     switches the spindle off straight after, it is kept running for the

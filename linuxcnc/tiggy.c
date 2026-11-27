@@ -127,6 +127,8 @@ RTAPI_MP_STRING(io_ip, "address of an I/O expansion module (auto to find it), em
 #define SYNC_TRIM_GAIN      1.0         /* copy slowed by this share per second of motion queued too much */
 #define SYNC_TRIM_SLOWER    0.30        /* ...at most this much slower */
 #define SYNC_TRIM_FASTER    0.05        /* ...or faster than the real spindle */
+#define SYNC_RUN_UP_MIN_MS  150u        /* the copy is left alone while LinuxCNC takes the axis up to the */
+#define SYNC_RUN_UP_MAX_MS  1000u       /* spindle's speed: at least, and at most, this long */
 #define SYNC_LEAVE          0.2         /* copy slower than this share of the speed a move was begun at:
                                            what follows is played by the clock again */
 
@@ -1199,6 +1201,8 @@ typedef struct {
     double   revs_last, revs_sent;      /* the copy's position: newest period, and up to where sent */
     double   sync_carry;
     double   vtrim;                     /* tg_actual_t.spindle_trim */
+    uint64_t t_sync;                    /* when the move in step with the spindle began */
+    uint32_t run_up_ms;                 /* how long after that the copy is left untrimmed */
 } motion_t;
 
 static motion_t mot;
@@ -1429,6 +1433,24 @@ static void take_samples(link_t *L, motion_t *m, const tg_wanted_t *w, uint64_t 
                 m->index_pending = 1;
                 m->revs_sent = s.revs;
                 m->sync_carry = 0.0;
+                /* LinuxCNC first takes the axis up to the spindle's speed and
+                 * only then ties it to the spindle's position, with whatever
+                 * it has fallen behind by then: half the square of the copy's
+                 * speed, over the acceleration.  That is where on the work the
+                 * thread begins - so for as long as the run-up can take, the
+                 * copy must turn at the spindle's own speed, the same on
+                 * every pass, and not be slowed or hurried for the queue. */
+                double longest = 0.0;
+                for (int j = 0; j < MAX_JOINTS; j++) {
+                    if (!w->accel[j] || !w->max_rate[j]) continue;
+                    double t = (double)w->max_rate[j] / (double)w->accel[j];
+                    if (t > longest) longest = t;
+                }
+                m->run_up_ms = (uint32_t)(longest * 1000.0) + 100u;
+                if (m->run_up_ms < SYNC_RUN_UP_MIN_MS) m->run_up_ms = SYNC_RUN_UP_MIN_MS;
+                if (m->run_up_ms > SYNC_RUN_UP_MAX_MS) m->run_up_ms = SYNC_RUN_UP_MAX_MS;
+                m->t_sync = now;
+                m->vtrim = 0.0;
                 m->force_move = 1;              /* the index is waited for even if the first segment is short */
             }
             if (memcmp(s.target, m->last, sizeof(m->last)) != 0) m->seg_moving = 1;
@@ -1529,6 +1551,7 @@ static void motion_on_status(link_t *L, uint64_t now)
             double vt = -SYNC_TRIM_GAIN * err;
             if (vt < -SYNC_TRIM_SLOWER) vt = -SYNC_TRIM_SLOWER;
             if (vt > SYNC_TRIM_FASTER) vt = SYNC_TRIM_FASTER;
+            if (now - m->t_sync < m->run_up_ms) vt = 0.0;       /* (not during the run-up: see take_samples()) */
             m->vtrim += (vt - m->vtrim) * 0.05;
             m->trim = 0.0;
             m->err_filt = 0.0;
