@@ -100,6 +100,20 @@ def load_library(path):
              "  firmware\\test\\pc\\build.bat   (Windows)   or   firmware/test/pc/build.sh")
 
 
+def claim(kind, address):
+    """A socket on one of the controller's ports - which no other simulator on this PC may
+    have: of two, each would get part of what a host sends (on Linux the datagrams go to one
+    and the connections to the other), and tests fail for no reason they can show."""
+    s = socket.socket(socket.AF_INET, kind)
+    if kind == socket.SOCK_STREAM and os.name != "nt":
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)     # (there: a port just closed can be taken again, no more)
+    try:
+        s.bind(address)
+    except OSError:
+        sys.exit("Port %d is in use: another simulator is running on this PC. Close it first." % address[1])
+    return s
+
+
 def ip_to_int(ip):
     return struct.unpack("<I", socket.inet_aton(ip))[0]
 
@@ -202,9 +216,7 @@ class FirmwareSim:
                 self.advance()
 
     def run_tcp(self):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((self.args.bind, TCP_PORT))
+        srv = self.tcp_srv
         srv.listen(2)
         while True:
             conn, addr = srv.accept()
@@ -275,9 +287,7 @@ class FirmwareSim:
 
     # ---------------------------------------------------- automation channel
     def run_control(self):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("127.0.0.1", self.args.control_port))
+        srv = self.ctl_srv
         srv.listen(4)
         while True:
             conn, _ = srv.accept()
@@ -397,12 +407,11 @@ def main():
     if os.name == "nt":
         ctypes.windll.winmm.timeBeginPeriod(1)      # 1 ms sleeps
 
+    ports = (claim(socket.SOCK_DGRAM, (args.bind, UDP_MOTION_PORT)), claim(socket.SOCK_STREAM, (args.bind, TCP_PORT)),
+             claim(socket.SOCK_STREAM, ("127.0.0.1", args.control_port)))
     sim = FirmwareSim(args)
     sim.apply_inputs()
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((args.bind, UDP_MOTION_PORT))
-    sim.udp = s
+    sim.udp, sim.tcp_srv, sim.ctl_srv = ports
     for fn in (sim.run_udp, sim.run_tcp, sim.run_control, sim.run_clock):
         threading.Thread(target=fn, daemon=True).start()
     sim.log("Tiggy firmware simulator ready: TCP %d, UDP %d, control 127.0.0.1:%d"

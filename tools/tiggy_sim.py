@@ -28,9 +28,11 @@ line for test automation, e.g.  {"cmd":"get"}  {"cmd":"set","estop":1}.
 import argparse
 import json
 import math
+import os
 import random
 import socket
 import struct
+import sys
 import threading
 import time
 from collections import deque
@@ -97,6 +99,20 @@ for _i, _p in enumerate(_PINS):
     CFG_TYPES[0x0500 + _i] = (0, _p)
 CFG_TYPES.update({0x0520: (0, 0xFF), 0x0521: (0, 0xFF), 0x0522: (0, 0xFF),      # spindle encoder
                   0x0530: (0, 18), 0x0531: (0, 21), 0x0532: (0, 36), 0x0533: (0, 0xFF)})    # misc inputs
+
+
+def claim(kind, address):
+    """A socket on one of the controller's ports - which no other simulator on this PC may
+    have: of two, each would get part of what a host sends (on Linux the datagrams go to one
+    and the connections to the other), and tests fail for no reason they can show."""
+    s = socket.socket(socket.AF_INET, kind)
+    if kind == socket.SOCK_STREAM and os.name != "nt":
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)     # (there: a port just closed can be taken again, no more)
+    try:
+        s.bind(address)
+    except OSError:
+        sys.exit("Port %d is in use: another simulator is running on this PC. Close it first." % address[1])
+    return s
 
 
 def crc16(data: bytes) -> int:
@@ -808,10 +824,7 @@ class Sim:
 
     # --------------------------------------------------------------- threads
     def run_udp(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((self.args.bind, UDP_MOTION_PORT))
-        self.udp = s
+        s = self.udp
         while True:
             try:
                 data, addr = s.recvfrom(2048)
@@ -850,9 +863,7 @@ class Sim:
                         self.udp_send_host(self.build_status())
 
     def run_tcp(self):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((self.args.bind, TCP_PORT))
+        srv = self.tcp_srv
         srv.listen(2)
         while True:
             conn, addr = srv.accept()
@@ -946,9 +957,7 @@ class Sim:
 
     # ---------------------------------------------------- automation channel
     def run_control(self):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("127.0.0.1", self.args.control_port))
+        srv = self.ctl_srv
         srv.listen(4)
         while True:
             conn, _ = srv.accept()
@@ -1024,8 +1033,10 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
-
+    ports = (claim(socket.SOCK_DGRAM, (args.bind, UDP_MOTION_PORT)), claim(socket.SOCK_STREAM, (args.bind, TCP_PORT)),
+             claim(socket.SOCK_STREAM, ("127.0.0.1", args.control_port)))
     sim = Sim(args)
+    sim.udp, sim.tcp_srv, sim.ctl_srv = ports
     sim.tcp_owner = None
     for fn in (sim.run_udp, sim.run_tcp, sim.run_control, sim.run_exec):
         threading.Thread(target=fn, daemon=True).start()

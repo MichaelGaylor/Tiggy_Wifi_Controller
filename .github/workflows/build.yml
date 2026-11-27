@@ -69,10 +69,12 @@ jobs:
       - name: Protocol conformance and firmware self-tests
         run: |
           python tools/firmware_sim.py --quiet &
+          SIM=$!
           sleep 3
           python tools/protocol_conformance.py --sim --motion 127.0.0.1
           python tools/firmware_selftest.py
           python tools/threading_test.py
+          kill $SIM       # (it would outlive this step, and the next step's simulator could not start beside it)
 
       - name: The bench tests, with the simulator for a board
         run: |
