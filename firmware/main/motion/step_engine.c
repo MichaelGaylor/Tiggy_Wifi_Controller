@@ -811,6 +811,21 @@ void se_get_position(int32_t position[WCNC_MAX_AXES])
     SE_UNLOCK();
 }
 
+/* (In RAM, and calling nothing that is not: the step interrupt is held off
+ * while this runs, and must not be kept waiting for flash.) */
+void SE_ISR_ATTR se_get_position_spindle(int32_t position[WCNC_MAX_AXES], se_spindle_t *spindle)
+{
+    SE_LOCK();
+    uint64_t now = port_now();
+    for (int i = 0; i < WCNC_MAX_AXES; i++) position[i] = se.position[i];
+    uint32_t milli = spt_rpm_milli();
+    spindle->position = spt_position16(now);
+    spindle->index_count = spt_index_count();
+    SE_UNLOCK();
+    uint32_t rpm = (milli + 500u) / 1000u;
+    spindle->rpm = (uint16_t)(rpm > 65535u ? 65535u : rpm);
+}
+
 void se_set_position(int axis, int32_t value)
 {
     if (axis < 0 || axis >= WCNC_MAX_AXES) return;

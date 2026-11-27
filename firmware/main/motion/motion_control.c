@@ -122,11 +122,7 @@ void mc_hal_fill_status(wcnc_status_report_t *r)
     r->misc_inputs = gpio_control_get_misc_input_mask();
     if (wifi_is_connected() || eth_is_connected()) r->flags |= WCNC_STATUS_WIFI_CONNECTED;
     r->uptime_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    if (spindle_encoder_is_available()) {
-        r->spindle_rpm = spindle_encoder_get_rpm();
-        r->spindle_position = spindle_encoder_get_position();
-        r->spindle_index_count = spindle_encoder_get_index_count();
-    }
+    /* (the spindle is in the report already: read with the axes, see motion_core.c) */
     if (io_module_is_active()) {
         r->io_inputs = io_module_get_inputs();
         r->io_outputs = io_module_get_outputs();

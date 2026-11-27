@@ -1170,9 +1170,15 @@ static void send_status(void)
     memset(&pkt, 0, sizeof(pkt));
     wcnc_status_report_t *r = &pkt.report;
 
+    /* Axes and spindle from the same moment: the report then shows where a
+     * move played by the spindle lies on it */
     int32_t pos[WCNC_MAX_AXES];
-    se_get_position(pos);
+    se_spindle_t spindle;
+    se_get_position_spindle(pos, &spindle);
     memcpy(r->position_steps, pos, sizeof(pos));
+    r->spindle_rpm = spindle.rpm;
+    r->spindle_position = spindle.position;
+    r->spindle_index_count = spindle.index_count;
     r->buffer_available = se_free();
     r->buffer_total = SE_QUEUE_SIZE - 1;
     {

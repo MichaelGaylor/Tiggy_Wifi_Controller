@@ -125,6 +125,17 @@ bool se_sync_slipped(void);
 /* --- Position and feedback ------------------------------------------- */
 
 void     se_get_position(int32_t position[WCNC_MAX_AXES]);
+/* The axes and the spindle as they are at one and the same moment, for a
+ * status report: a host can then see from the report how a move played by
+ * the spindle lies on it.  (Read one after the other they are a tenth of a
+ * millisecond and more apart on the ESP32 - two degrees at 3000 rpm.)
+ * Without a spindle sensor the three spindle values are 0. */
+typedef struct {
+    uint16_t rpm;                   /* 0..65535 */
+    uint16_t position;              /* angle past the index, 0..65535 = one revolution */
+    uint32_t index_count;
+} se_spindle_t;
+void     se_get_position_spindle(int32_t position[WCNC_MAX_AXES], se_spindle_t *spindle);
 void     se_set_position(int axis, int32_t value);
 uint16_t se_current_id(void);               /* segment_id being played */
 uint32_t se_feed_rate(void);                /* steps/s of the fastest axis right now */

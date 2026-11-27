@@ -163,6 +163,14 @@ python tools/ugs_serial_test.py COM14                 # TiggyUGS's own serial co
 python tools/latency_test.py <ip>                     # how promptly the controller answers over the network: median and worst case
 ```
 
+With one wire on it - X step linked to the single spindle sensor's terminal, GPIO 1 to GPIO 21 on the DevKitC - the board tests its own step output, its spindle sensor input and screw cutting:
+
+```bash
+python tools/spindle_loopback_test.py <ip> --bench    # counts its own step pulses, then cuts threading passes against its spindle output
+```
+
+It changes settings (the spindle sensor, and which terminal is X step and which the spindle output) and puts them back at the end, so nothing but the wire may be connected to those two terminals. The file says what is measured and how.
+
 ## Documentation
 
 - [User Manual](https://michaelgaylor.github.io/Tiggy_Wifi_Controller/plugin_manual.html) -- full plugin configuration guide ([markdown](Tiggy_Plugin_Manual.md))

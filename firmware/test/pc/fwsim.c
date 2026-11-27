@@ -394,12 +394,6 @@ void mc_hal_fill_status(wcnc_status_report_t *r)
     r->uptime_ms = (uint32_t)((pc_now_us - s_boot_us) / 1000u);
     r->misc_inputs = (uint8_t)(m.force_misc_in & 0x0F);
     r->io_inputs = (uint16_t)m.force_io_in;
-    if (spt_ready()) {
-        uint32_t rpm = (spt_rpm_milli() + 500u) / 1000u;
-        r->spindle_rpm = (uint16_t)(rpm > 65535u ? 65535u : rpm);
-        r->spindle_position = spt_position16(pc_now_us);
-        r->spindle_index_count = spt_index_count();
-    }
 }
 
 static uint8_t capabilities(void)

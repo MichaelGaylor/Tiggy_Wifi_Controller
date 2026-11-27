@@ -300,7 +300,9 @@ int64_t IRAM_ATTR spt_next_index(int64_t angle, int direction)
     return past ? angle - (int64_t)past : angle - SPT_REV;
 }
 
-uint32_t spt_rpm_milli(void)
+/* (These three are in RAM as well: se_get_position_spindle() reads them with
+ * the step interrupt held off, where nothing may wait for flash.) */
+uint32_t IRAM_ATTR spt_rpm_milli(void)
 {
     if (s.mode == SPT_PULSES) return s.rpm;
     if (s.mode != SPT_QUADRATURE || !s.tracking) return 0;
@@ -308,12 +310,12 @@ uint32_t spt_rpm_milli(void)
     return (uint32_t)(((uint64_t)(v >> 12) * 60000000000ull) >> 36);
 }
 
-uint16_t spt_position16(uint64_t now)
+uint16_t IRAM_ATTR spt_position16(uint64_t now)
 {
     return (uint16_t)(((uint32_t)(uint64_t)spt_angle(now) - s.phase) >> 16);
 }
 
-uint32_t spt_index_count(void) { return s.index_count; }
+uint32_t IRAM_ATTR spt_index_count(void) { return s.index_count; }
 
 uint32_t IRAM_ATTR spt_index_epoch(void) { return s.epoch; }
 
