@@ -89,7 +89,7 @@ jobs:
           # the controller testing its encoder inputs with signals of its own - and noticing a link left off, and counts lost
           python tools/encoder_loopback_test.py 127.0.0.1 --sim
           python tools/encoder_loopback_test.py 127.0.0.1 --sim --sim-links missing=2 --expect "(charge pump) to GPIO"
-          python tools/encoder_loopback_test.py 127.0.0.1 --sim --sim-links slip=20 -k "62300 lines" --expect "against the clock"
+          python tools/encoder_loopback_test.py 127.0.0.1 --sim --sim-links slip=20 -k "50000 lines" --expect "against the clock"
 
   test-linuxcnc-driver:
     name: Test the LinuxCNC driver

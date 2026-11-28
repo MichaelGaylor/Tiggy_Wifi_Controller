@@ -183,7 +183,7 @@ With three links - spindle output to encoder A, charge pump to encoder B, Z step
 python tools/encoder_loopback_test.py <ip> --bench    # A, B and index made by the controller itself: the count at speed, the index pulse, screw cutting
 ```
 
-The spindle PWM and the charge pump, set to one frequency, are an encoder's A and B; Z stepped by the clock is its index pulse, and a measure of the count as well, since all three come from one crystal. The test checks that the real pulse counter neither loses nor gains a count at up to 62 300 lines a second (a quarter of a million counts, three million in all), that every index pulse is taken and found at one place, and that threading passes are played by A and B as they are by a single sensor. What it cannot check is an encoder itself and the wiring to it - for that:
+The spindle PWM and the charge pump, set to one frequency, are an encoder's A and B; Z stepped by the clock is its index pulse, and a measure of the count as well, since all three come from one crystal. The test checks that the real pulse counter neither loses nor gains a count at up to 50 000 lines a second (200 000 counts, two and a half million in all; the spindle output makes no more than 50 kHz), that every index pulse is taken and found at one place, and that threading passes are played by A and B as they are by a single sensor. What it cannot check is an encoder itself and the wiring to it - for that:
 
 A spindle encoder can be tested the same way before it is on a machine: wired to the controller, turned by hand, then spun with a cordless drill on its shaft.
 

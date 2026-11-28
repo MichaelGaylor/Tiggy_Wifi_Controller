@@ -31,12 +31,13 @@ What is tested, the encoder set up with its index pulse:
   - A and B are counted: the speed read is the frequency made.
   - Every Z pulse is taken as an index pulse, and found at one place.
 Then as an encoder without one, so that nothing corrects the count:
-  - No count is lost or gained, at 10600 to 62300 lines a second (a quarter
-    of a million counts): Z is stepped by the clock, twenty steps to a turn
-    of the count, and its steps are held against the count in every status
-    report made meanwhile.  A report says the count was here before a step
-    and there after it; thousands of them together say where the steps fall
-    to a count or so, and that must not move in up to three million counts.
+  - No count is lost or gained, at 10600 to 50000 lines a second (200 000
+    counts; the spindle output makes no more than 50 kHz): Z is stepped by
+    the clock, twenty steps to a turn of the count, and its steps are held
+    against the count in every status report made meanwhile.  A report says
+    the count was here before a step and there after it; thousands of them
+    together say where the steps fall to a count or so, and that must not
+    move in up to two and a half million counts.
   - Screw cutting by A and B, as in encoder_bench_test.py: a pass lies where
     it should on the spindle, a second pass on the first, Z stops with the
     signal when it is switched off in mid-pass, and a pass sent while it is
@@ -76,7 +77,8 @@ IO_CHARGE_PUMP = 0x04
 
 LINES = 400                     # what the encoder is set to: 1600 counts to a turn
 CLOCK = 80.0e6                  # of the chip's PWM timers
-RATES = (10600, 25000, 45000, 62300)    # lines a second; the first is also the spindle of the threading passes
+PWM_MOST = 50000                # Hz: asked for more, the spindle output makes this (and A and B are then two frequencies)
+RATES = (10600, 25000, 40000, PWM_MOST) # lines a second; the first is also the spindle of the threading passes
 SECONDS = 12                    # each is counted for
 STEPS = 20                      # of Z to a turn of the count, while it is counted against the clock
 
@@ -97,7 +99,7 @@ def pick(wanted):
     for d in range(3000):
         for f in (wanted + d, wanted - d):
             n = int(round(CLOCK / 4.0 / f))
-            if 1000 <= f <= 65535 and abs(CLOCK / 4.0 / f - n) < 0.1 and math.gcd(n, 10) == 1 and \
+            if 1000 <= f <= PWM_MOST and abs(CLOCK / 4.0 / f - n) < 0.1 and math.gcd(n, 10) == 1 and \
                     abs(made(f, 1024) - made(f, 256)) < 1e-9 * f:
                 return f, n
     raise AssertionError("no frequency near %d that both timers make alike" % wanted)

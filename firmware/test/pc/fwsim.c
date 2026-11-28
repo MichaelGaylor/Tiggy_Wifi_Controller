@@ -413,6 +413,7 @@ static void links_follow(void)
     if (!s_links.on) return;
     uint32_t pump = cfg_u(WCNC_CFG_CHARGE_PUMP_FREQ), pwm = cfg_u(WCNC_CFG_SPINDLE_PWM_FREQ);
     if (pump < 100) pump = 10000;
+    if (pwm > 50000) pwm = 50000;           /* as gpio_control.c does: asked for more, the spindle output makes this */
     bool a = m.duty > 0.02 && m.duty < 0.98 && pwm >= 100 && s_links.missing != 1;
     bool b = m.out.charge_pump && s_links.missing != 2;
     uint32_t now[4] = { a, b, pwm, pump };
